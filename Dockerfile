@@ -1,6 +1,8 @@
+# Dockerfile
+
 FROM node:18-slim
 
-# ① Hostapd, iw, wireless-tools ve iproute2 (ip komutları için)
+# ① Hostapd, iw, wireless-tools ve iproute2 paketlerini yükle
 RUN apt-get update && \
     apt-get install -y hostapd wireless-tools iw iproute2 && \
     rm -rf /var/lib/apt/lists/*
@@ -12,7 +14,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install
 
-# ④ Projedeki diğer tüm dosyaları kopyala
+# ④ Projedeki diğer tüm dosyaları (hostapd.conf, server.js, index.html, vs.) kopyala
 COPY . .
 
 # ⑤ API’nın dinleyeceği portu bildir
