@@ -123,7 +123,7 @@
 
   // 1) Wi-Fi kartlarını listeleyen fonksiyon
   function fetchInterfaces() {
-    fetch('http://localhost:3000/api/interfaces')
+    fetch('/api/interfaces')
       .then(res => res.json())
       .then(data => {
         const sel = document.getElementById("wifiInterface");
@@ -150,7 +150,7 @@
 
   // 2) Kayıtlı SSID'leri ve VLAN seçeneklerini güncelleyen fonksiyon
   function fetchSsids() {
-    fetch('http://localhost:3000/api/ssids')
+    fetch('/api/ssids')
       .then(res => res.json())
       .then(data => {
         ssidList = data.ssids;
@@ -164,14 +164,12 @@
 
   // Mevcut VLAN'ları benzersiz biçimde toplayıp <select id="vlanSelect"> içine ekler
   function populateVlanOptions() {
-    // “VLAN yok” kutusuna bakılacak, eğer pasifse select pasif kalacak
     const noVlan = document.getElementById("noVlanCheckbox").checked;
     const select = document.getElementById("vlanSelect");
     select.innerHTML = ''; // Önce sil
 
     if (noVlan) {
       select.disabled = true;
-      // Pasif olduğunda placeholder metni
       const placeholder = document.createElement('option');
       placeholder.disabled = true;
       placeholder.selected = true;
@@ -180,10 +178,7 @@
       return;
     }
 
-    // “VLAN yok” işareti kaldırıldıysa seçenekleri ekle
     select.disabled = false;
-
-    // 2.1) Önce benzersiz VLAN değerlerini topla (\"Yok\" hariç)
     const vlanSet = new Set();
     ssidList.forEach(item => {
       if (item.vlan && item.vlan !== 'Yok') {
@@ -191,14 +186,12 @@
       }
     });
 
-    // 2.2) Placeholder
     const placeholder = document.createElement('option');
     placeholder.disabled = true;
     placeholder.selected = true;
     placeholder.textContent = 'Lütfen VLAN seçiniz';
     select.appendChild(placeholder);
 
-    // 2.3) Her benzersiz VLAN değeri <option> olarak ekle
     vlanSet.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v;
@@ -206,7 +199,6 @@
       select.appendChild(opt);
     });
 
-    // 2.4) En alt satıra “➕ Yeni VLAN Ekle” seçeneğini koy
     const customOpt = document.createElement('option');
     customOpt.value = 'custom';
     customOpt.textContent = '➕ Yeni VLAN Ekle';
@@ -283,16 +275,14 @@
       return;
     }
 
-    // Tekrarlı SSID kontrolü
     const mevcut = ssidList.some(item => item.ssid.toLowerCase() === ssid.toLowerCase());
     if (mevcut) {
       alert(`“${ssid}” zaten kayıtlı!`);
       return;
     }
 
-    // Backend'e POST at
     const payload = { ssid, password, vlan, enable, iface };
-    fetch('http://localhost:3000/api/ssids', {
+    fetch('/api/ssids', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -302,7 +292,6 @@
       return res.json();
     })
     .then(result => {
-      // Listeyi ve VLAN seçeneklerini güncelle
       fetchSsids();
       document.getElementById("newWifiMessage").innerHTML = `
         <div class="alert alert-light border-secondary p-2">
@@ -310,7 +299,6 @@
         </div>`;
       generateQr(ssid, password, "qrcode");
 
-      // Formu sıfırla
       ssidInput.value = "";
       passwordInput.value = "";
       noVlanCheckbox.checked = true;
@@ -334,7 +322,6 @@
     if (item.vlan !== "Yok") {
       document.getElementById("noVlanCheckbox").checked = false;
       toggleVlanDisable();
-      // VLAN select'i önce seçeneklerle doldur, sonra custom seçimi ve textbox'ları aç
       populateVlanOptions();
       document.getElementById("vlanSelect").value = item.vlan !== "custom"
         && Array.from(document.getElementById("vlanSelect").options).some(o => o.value === item.vlan)
@@ -352,7 +339,6 @@
       toggleVlanDisable();
     }
 
-    // Geçici olarak listeden sil
     ssidList.splice(index, 1);
     renderList();
     populateVlanOptions();
@@ -360,7 +346,7 @@
 
   // “Sil” tuşuna basılınca backend'e DELETE isteği atıp listeyi yenile
   function handleDeleteSsid(index) {
-    fetch(`http://localhost:3000/api/ssids/${index}`, {
+    fetch(`/api/ssids/${index}`, {
       method: 'DELETE'
     })
     .then(res => {
@@ -429,7 +415,6 @@
       select.innerHTML = `<option disabled selected>Lütfen VLAN seçiniz</option>`;
       customGroup.style.display = "none";
     } else {
-      // Eğer “VLAN yok” işareti kaldırıldıysa hemen VLAN seçeneklerini doldur
       populateVlanOptions();
     }
   }
