@@ -1,8 +1,8 @@
 FROM node:18-slim
 
-# ① Hostapd, iw ve wireless-tools paketlerini mutlaka kur
+# ① Hostapd, iw, wireless-tools ve iproute2 (ip komutları için)
 RUN apt-get update && \
-    apt-get install -y hostapd wireless-tools iw && \
+    apt-get install -y hostapd wireless-tools iw iproute2 && \
     rm -rf /var/lib/apt/lists/*
 
 # ② Çalışma dizinini /app olarak ayarla
