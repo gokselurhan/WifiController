@@ -1,22 +1,22 @@
 FROM node:18-slim
 
-# A) Hostapd, iw ve wireless-tools paketlerini yükle
+# ① Hostapd, iw ve wireless-tools paketlerini yükle
 RUN apt-get update && \
     apt-get install -y hostapd wireless-tools iw && \
     rm -rf /var/lib/apt/lists/*
 
-# B) Çalışma dizinini ayarla
+# ② Çalışma dizinini ayarla
 WORKDIR /app
 
-# C) package.json'ı kopyala ve bağımlılıkları yükle
+# ③ package.json'ı kopyala ve bağımlılıkları yükle
 COPY package.json ./
 RUN npm install
 
-# D) Geri kalan dosyaları kopyala
+# ④ Projedeki diğer tüm dosyaları kopyala
 COPY . .
 
-# E) Port bildirimi
+# ⑤ Port bildirimi
 EXPOSE 3000
 
-# F) Uygulamayı başlat (Root olarak container içindeyken hostapd + ip link komutları çalışacak)
+# ⑥ Uygulamayı başlat
 CMD ["node", "server.js"]
