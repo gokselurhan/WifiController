@@ -1,7 +1,7 @@
-# 1) Temel imaj olarak Node 18 slim alıyoruz
+# 1) Temel imaj olarak Node 18 slim al
 FROM node:18-slim
 
-# 2) Paket listelerini güncelle ve iw/wireless-tools paketlerini yükle
+# 2) Paket listelerini güncelle ve iw ile wireless-tools paketlerini yükle
 RUN apt-get update && \
     apt-get install -y wireless-tools iw && \
     rm -rf /var/lib/apt/lists/*
@@ -9,17 +9,17 @@ RUN apt-get update && \
 # 3) Çalışma dizinini /app olarak ayarla
 WORKDIR /app
 
-# 4) package.json ve package-lock.json (varsa) kopyala
+# 4) package.json dosyasını kopyala
 COPY package.json ./
 
-# 5) Bağımlılıkları yükle
+# 5) Node.js bağımlılıklarını yükle
 RUN npm install
 
-# 6) Kalan tüm dosyaları konteynere kopyala
+# 6) Geri kalan tüm dosyaları konteynere kopyala
 COPY . .
 
-# 7) Konteyner içindeki uygulamanın dinleyeceği portu bildir
+# 7) Konteyner içindeki uygulamanın dinleyeceği port
 EXPOSE 3000
 
-# 8) Konteyner çalıştığında uygulamanın aşağıdaki komutla başlamasını sağla
+# 8) Uygulama başladığında çalışacak komut
 CMD ["npm", "start"]
