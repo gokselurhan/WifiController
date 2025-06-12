@@ -207,35 +207,35 @@ Put your HTML text here<!DOCTYPE html>
 
   // Listeyi render eden fonksiyon
   function renderList() {
-    const ul = document.getElementById("ssidList");
-    ul.innerHTML = '';
+  const ul = document.getElementById("ssidList");
+  ul.innerHTML = '';
 
-    if (!ssidList || ssidList.length === 0) {
-      const li = document.createElement("li");
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `<div class="fst-italic text-muted">Henüz tanımlı SSID yok</div><div></div>`;
-      ul.appendChild(li);
-      return;
-    }
-
-    ssidList.forEach((item, index) => {
-      const li = document.createElement("li");
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `
-        <div>
-          <strong>${item.ssid}</strong>
-          (VLAN: ${item.vlan})
-          [${item.enable == 1 ? "Aktif" : "Pasif"}]
-          (Kart: ${item.iface})
-        </div>
-        <div>
-          <button class="btn btn-sm btn-primary me-2" onclick="startEditSsid(${index})">Düzenle</button>
-          <button class="btn btn-sm btn-secondary me-2" onclick="showQrModal(this, '${item.ssid}', '${item.password}')">QR Göster</button>
-          <button class="btn btn-sm btn-danger" onclick="handleDeleteSsid(${index})">Sil</button>
-        </div>`;
-      ul.appendChild(li);
-    });
+  if (!ssidList || ssidList.length === 0) {
+    const li = document.createElement("li");
+    li.className = "list-group-item d-flex justify-content-between align-items-center";
+    li.innerHTML = `<div class="fst-italic text-muted">Henüz tanımlı SSID yok</div><div></div>`;
+    ul.appendChild(li);
+    return;
   }
+
+  ssidList.forEach((item, index) => {
+    const li = document.createElement("li");
+    li.className = "list-group-item d-flex justify-content-between align-items-center";
+    li.innerHTML = `
+      <div>
+        <strong>${item.ssid}</strong>
+        (VLAN: ${item.vlan})
+        [${item.enable == 1 ? "Aktif" : "Pasif"}]
+        (Kart: ${item.iface})
+      </div>
+      <div>
+        <button class="btn btn-sm btn-primary me-2" onclick="startEditSsid(${index})">Düzenle</button>
+        <button class="btn btn-sm btn-secondary me-2" onclick="showQrModal(this, '${item.ssid}', '${item.password}')">QR Göster</button>
+        <button class="btn btn-sm btn-warning me-2" onclick="alert('Parola: ${item.password}')">Parola Göster</button>
+        <button class="btn btn-sm btn-danger" onclick="handleDeleteSsid(${index})">Sil</button>
+      </div>`;
+    ul.appendChild(li);
+  });
 
   // “Ayarları Uygula” tuşuna basılınca yeni SSID ekleyen fonksiyon
   function handleAddSsid() {
