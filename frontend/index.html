@@ -9,7 +9,6 @@
     body { background: #f8f9fa; padding: 40px; }
     .card { margin-bottom: 30px; }
     .qrcode { margin-top: 10px; }
-
     .qr-popup {
       position: absolute;
       background: #fff;
@@ -38,7 +37,6 @@
     .qr-popup .close-btn:hover {
       color: #e22;
     }
-
     #ssidList li {
       position: relative;
     }
@@ -86,7 +84,6 @@
           <label class="form-check-label" for="noVlanCheckbox">VLAN yok</label>
         </div>
         <select id="vlanSelect" class="form-select" disabled onchange="toggleVlanInput()">
-          <!-- Seçenekler fetchSsids() içinde doldurulacak -->
           <option disabled selected>Lütfen VLAN seçiniz</option>
         </select>
         <div id="vlanCustomGroup" class="row mt-2" style="display: none;">
@@ -237,7 +234,7 @@
     });
   }
 
-  // “Ayarları Uygula” tuşuna basılınca yeni SSID ekleyen fonksiyon
+  // "Ayarları Uygula" tuşuna basılınca yeni SSID ekleyen fonksiyon
   function handleAddSsid() {
     const ssidInput = document.getElementById("ssid");
     const passwordInput = document.getElementById("password");
@@ -277,7 +274,7 @@
 
     const mevcut = ssidList.some(item => item.ssid.toLowerCase() === ssid.toLowerCase());
     if (mevcut) {
-      alert(`“${ssid}” zaten kayıtlı!`);
+      alert(`"${ssid}" zaten kayıtlı!`);
       return;
     }
 
@@ -311,7 +308,7 @@
     });
   }
 
-  // “Düzenle” tuşuna basıldığında formu dolduran fonksiyon
+  // "Düzenle" tuşuna basıldığında formu dolduran fonksiyon
   function startEditSsid(index) {
     const item = ssidList[index];
     document.getElementById("ssid").value = item.ssid;
@@ -344,8 +341,10 @@
     populateVlanOptions();
   }
 
-  // “Sil” tuşuna basılınca backend'e DELETE isteği atıp listeyi yenile
+  // "Sil" tuşuna basılınca backend'e DELETE isteği atıp listeyi yenile
   function handleDeleteSsid(index) {
+    if (!confirm("Bu SSID'yi silmek istediğinize emin misiniz?")) return;
+    
     fetch(`/api/ssids/${index}`, {
       method: 'DELETE'
     })
