@@ -10,33 +10,34 @@
     .card { margin-bottom: 30px; }
     .qrcode { margin-top: 10px; }
 
-    /* QR-Göster popup */
+    /* Popup QR kutusu */
     .qr-popup {
       position: absolute;
       background: #fff;
       border: 1px solid #ccc;
       border-radius: 8px;
-      padding: 20px;
+      padding: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       z-index: 1000;
       min-width: 200px;
       min-height: 200px;
-      overflow: visible;
       visibility: hidden;
     }
     .qr-popup .close-btn {
       position: absolute;
-      top: 4px;
-      right: 4px;
+      top: 8px;    /* içten 8px */
+      right: 8px;  /* içten 8px */
       font-size: 1.2rem;
       color: #888;
-      background: none;
+      background: #fff;
       border: none;
       cursor: pointer;
+      line-height: 1;
       transition: color 0.2s;
     }
     .qr-popup .close-btn:hover { color: #e22 }
 
+    /* Düzenleme modundaki liste satırı */
     .list-group-item-editing {
       background-color: #e9ecef;
       opacity: 0.7;
@@ -44,7 +45,6 @@
   </style>
 </head>
 <body>
-
 <div class="container">
   <h2 class="mb-4">WiFi Controller Panel</h2>
 
@@ -90,12 +90,8 @@
             <option disabled selected>Lütfen VLAN seçiniz</option>
           </select>
           <div id="vlanCustomGroup" class="row mt-2" style="display:none">
-            <div class="col">
-              <input type="text" id="vlanCustomId" class="form-control" placeholder="VLAN ID">
-            </div>
-            <div class="col">
-              <input type="text" id="vlanCustomDesc" class="form-control" placeholder="Açıklama">
-            </div>
+            <div class="col"><input type="text" id="vlanCustomId" class="form-control" placeholder="VLAN ID"></div>
+            <div class="col"><input type="text" id="vlanCustomDesc" class="form-control" placeholder="Açıklama"></div>
           </div>
         </div>
         <div class="mb-3">
@@ -109,29 +105,33 @@
         <button id="cancelBtn" class="btn btn-secondary ms-2" onclick="cancelEdit()" style="display:none">İptal</button>
       </fieldset>
 
-      <!-- Seçili karta ait QR burada her zaman duracak -->
+      <!-- Geçici QR & mesaj; yalnızca SSID eklenir eklenmez gösterilir -->
       <div id="newWifiMessage" class="mt-3"></div>
     </div>
   </div>
 </div>
 
 <script>
+  // Maksimum SSID limiti per kart; boş bırakılırsa sınırsız
+  const maxBroadcasts = {
+    // örn: 'wls160': 2,
+    // 'wlan0': 4
+  };
+
   let ssidList = [], isEditing = false, editingIndex = null;
 
   document.addEventListener("DOMContentLoaded", () => {
     fetchInterfaces();
     fetchSsids();
-    const ifaceSel = document.getElementById("wifiInterface");
-    ifaceSel.addEventListener("change", onInterfaceChange);
+    document.getElementById("wifiInterface").addEventListener("change", onInterfaceChange);
     disableForm();
   });
 
   function fetchInterfaces() {
     fetch('/api/interfaces').then(r=>r.json()).then(d=>{
       const sel = document.getElementById("wifiInterface");
-      sel.innerHTML = '';
-      sel.append(new Option('Lütfen Wi-Fi kartı seçin','',true,true));
-      d.interfaces.forEach(i=>sel.append(new Option(i,i)));
+      sel.innerHTML = '<option disabled selected>Seçin…</option>';
+      d.interfaces.forEach(i=> sel.append(new Option(i,i)));
     });
   }
 
@@ -160,7 +160,7 @@
           <button class="btn btn-sm btn-primary me-2" onclick="startEditSsid(${idx})">Düzenle</button>
           <button class="btn btn-sm btn-secondary me-2" onclick="showQrModal(this,'${it.ssid}','${it.password}')">QR Göster</button>
           <button class="btn btn-sm btn-warning me-2" onclick="alert('Parola: ${it.password}')">Parola Göster</button>
-          <button class="btn btn-sm btn-danger" onclick="handleDeleteSsid(${idx})">Sil</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteSsid(${idx})">Sil</button>
         </div>`;
       if (isEditing && idx===editingIndex) {
         li.classList.add("list-group-item-editing");
@@ -173,72 +173,80 @@
   function onInterfaceChange() {
     const iface = document.getElementById("wifiInterface").value;
     const warn  = document.getElementById("interfaceWarning");
-    const fs    = document.getElementById("newSsidFieldset");
     warn.textContent = '';
+    if (isEditing) cancelEdit();
 
-    // Eğer düzenleme modundaysak, kartı değiştirdi→düzenlemeyi iptal et
-    if (isEditing && ssidList[editingIndex]?.iface !== iface) {
-      cancelEdit();
-    }
-
-    // Boş seçimse pasif
     if (!iface) {
-      fs.disabled = true;
-      updatePersistentQr();
+      disableForm();
       return;
     }
 
-    // Aynı karta bir SSID zaten atanmışsa uyar + pasif
-    const taken = ssidList.some(x=>x.iface===iface);
-    if (taken) {
-      warn.textContent = "Bu karta zaten atanmış SSID var.";
-      fs.disabled = true;
-    } else {
-      fs.disabled = false;
-    }
+    // O karta atanmış SSID sayısı:
+    const count = ssidList.filter(x=>x.iface===iface).length;
+    // limit yoksa Infinity, varsa tanımlı
+    const limit = maxBroadcasts[iface] ?? Infinity;
 
-    updatePersistentQr();
+    if (count >= limit) {
+      warn.textContent = `Bu karta en fazla ${limit} SSID atayabilirsiniz (mevcut: ${count}).`;
+      disableForm();
+    } else {
+      enableForm();
+    }
   }
 
   function handleAddSsid() {
-    const ssidIn = document.getElementById("ssid").value.trim();
-    const pwd    = document.getElementById("password").value.trim();
-    const iface  = document.getElementById("wifiInterface").value;
+    const ssidIn = document.getElementById("ssid").value.trim(),
+          pwd    = document.getElementById("password").value.trim(),
+          iface  = document.getElementById("wifiInterface").value;
+    let vlan = document.getElementById("noVlanCheckbox").checked
+      ? "Yok"
+      : (()=>{
+          const v = document.getElementById("vlanSelect").value;
+          if (v==="custom") {
+            const i=document.getElementById("vlanCustomId").value.trim(),
+                  d=document.getElementById("vlanCustomDesc").value.trim();
+            if(!i||!d){alert("Özel VLAN boş olamaz!"); return null;}
+            return `${i} - ${d}`;
+          }
+          return v;
+        })();
+    if(vlan===null) return;
 
-    let vlan;
-    if (document.getElementById("noVlanCheckbox").checked) vlan = "Yok";
-    else {
-      const sel = document.getElementById("vlanSelect").value;
-      if (sel==="custom") {
-        const i = document.getElementById("vlanCustomId").value.trim();
-        const d = document.getElementById("vlanCustomDesc").value.trim();
-        if (!i||!d) { alert("Özel VLAN boş olamaz!"); return }
-        vlan = `${i} - ${d}`;
-      } else vlan = sel;
-    }
-
-    const enable = document.getElementById("enable").value;
     if (!ssidIn||!pwd||!iface) { alert("SSID, parola ve kart seçimi zorunlu!"); return }
     if (ssidList.some((x,i)=>x.ssid.toLowerCase()===ssidIn.toLowerCase() && !(isEditing&&i===editingIndex))) {
       alert(`"${ssidIn}" zaten kayıtlı!`); return;
     }
 
-    fetch('/api/ssids',{ method:'POST',
+    fetch('/api/ssids',{
+      method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ssid:ssidIn,password:pwd,vlan,enable,iface})
+      body:JSON.stringify({ssid:ssidIn,password:pwd,vlan,enable:document.getElementById("enable").value,iface})
     })
     .then(r=>r.ok? r.json(): r.json().then(e=>{throw new Error(e.error)}))
-    .then(_=> fetchSsids())
+    .then(_=>{
+      // Geçici mesaj + QR:
+      document.getElementById("newWifiMessage").innerHTML = `
+        <div class="alert alert-light border-secondary p-2">
+          <strong>${ssidIn}</strong> eklendi. QR ile bağlanabilirsiniz.
+          <div class="qrcode mt-2" id="tempQr"></div>
+        </div>`;
+      new QRCode(document.getElementById("tempQr"),{
+        text:`WIFI:T:WPA;S:${ssidIn};P:${pwd};;`,
+        width:180, height:180
+      });
+      // liste ve state güncelle
+      isEditing=false; editingIndex=null;
+      fetchSsids();
+    })
     .catch(e=>alert("Hata: "+e.message));
   }
 
   function startEditSsid(idx) {
-    isEditing = true;
-    editingIndex = idx;
+    isEditing = true; editingIndex = idx;
     const it = ssidList[idx];
-    document.getElementById("ssid").value = it.ssid;
-    document.getElementById("password").value = it.password;
-    document.getElementById("enable").value = it.enable;
+    document.getElementById("ssid").value          = it.ssid;
+    document.getElementById("password").value      = it.password;
+    document.getElementById("enable").value        = it.enable;
     document.getElementById("wifiInterface").value = it.iface;
 
     if (it.vlan!=="Yok") {
@@ -249,7 +257,7 @@
       toggleVlanInput();
       if (it.vlan.includes(" - ")) {
         const [i,d] = it.vlan.split(" - ");
-        document.getElementById("vlanCustomId").value = i;
+        document.getElementById("vlanCustomId").value   = i;
         document.getElementById("vlanCustomDesc").value = d;
       }
     } else {
@@ -260,9 +268,7 @@
     document.getElementById("formHeader").textContent = "SSID Düzenle";
     document.getElementById("applyBtn").textContent  = "Güncelle";
     document.getElementById("cancelBtn").style.display = "inline-block";
-
-    document.getElementById("newSsidFieldset").disabled = false;
-    renderList();
+    enableForm(); renderList();
   }
 
   function cancelEdit() {
@@ -275,91 +281,64 @@
     toggleVlanDisable();
     document.getElementById("enable").value = "1";
     document.getElementById("wifiInterface").value = "";
-    renderList();
-    disableForm();
-    updatePersistentQr();
+    document.getElementById("interfaceWarning").textContent = '';
+    disableForm(); renderList();
   }
 
-  function handleDeleteSsid(idx) {
+  function deleteSsid(idx) {
     fetch(`/api/ssids/${idx}`,{method:'DELETE'})
-    .then(r=>r.ok? fetchSsids(): r.json().then(e=>{throw new Error(e.error)}))
-    .catch(e=>alert("Silme hatası: "+e.message));
+      .then(r=>r.ok? fetchSsids(): r.json().then(e=>{throw new Error(e.error)}))
+      .catch(e=>alert("Silme hatası: "+e.message));
   }
 
-  function updatePersistentQr() {
-    const iface = document.getElementById("wifiInterface").value;
-    const cont  = document.getElementById("newWifiMessage");
-    cont.innerHTML = '';
-    const it = ssidList.find(x=>x.iface===iface);
-    if (it) {
-      cont.innerHTML = `
-        <div class="alert alert-light border-secondary p-2">
-          <strong>${it.ssid}</strong> – QR ile bağlanabilirsiniz.
-          <div class="qrcode mt-2" id="persistentQr"></div>
-        </div>`;
-      new QRCode(document.getElementById("persistentQr"),{
-        text:`WIFI:T:WPA;S:${it.ssid};P:${it.password};;`,
-        width:180, height:180
-      });
-    }
-  }
-
+  /* Popup QR */
   function showQrModal(btn,ssid,pwd) {
     closeAnyPopup();
     const li = btn.closest("li");
-    const popup = document.createElement("div");
-    popup.className = "qr-popup";
+    const popup = document.createElement("div"); popup.className="qr-popup";
     const closeBtn = document.createElement("button");
-    closeBtn.className = "close-btn";
-    closeBtn.innerHTML = "&times;";
+    closeBtn.className="close-btn"; closeBtn.innerHTML="×";
     closeBtn.onclick = ()=>popup.remove();
     popup.append(closeBtn);
-    const qrC = document.createElement("div");
-    popup.append(qrC);
+    const qrC = document.createElement("div"); popup.append(qrC);
     li.append(popup);
-    new QRCode(qrC,{
-      text:`WIFI:T:WPA;S:${ssid};P:${pwd};;`,
-      width:180, height:180
-    });
-    const br = btn.getBoundingClientRect(),
-          lr = li.getBoundingClientRect();
-    popup.style.top  = `${br.bottom - lr.top + 6}px`;
-    popup.style.left = `${br.left   - lr.left}px`;
+    new QRCode(qrC,{ text:`WIFI:T:WPA;S:${ssid};P:${pwd};;`, width:180, height:180 });
+    const br = btn.getBoundingClientRect(), lr = li.getBoundingClientRect();
+    popup.style.top = (br.bottom - lr.top + 6) + "px";
+    popup.style.left= (br.left   - lr.left) + "px";
     popup.style.visibility = "visible";
   }
   function closeAnyPopup(){ document.querySelectorAll(".qr-popup").forEach(x=>x.remove()); }
 
+  /* VLAN kontrolleri */
   function toggleVlanDisable(){
     const sel = document.getElementById("vlanSelect"),
           grp = document.getElementById("vlanCustomGroup"),
           chk = document.getElementById("noVlanCheckbox");
-    if (chk.checked) {
-      sel.disabled = true;
-      sel.innerHTML = `<option disabled selected>Lütfen VLAN seçiniz</option>`;
-      grp.style.display = "none";
+    if(chk.checked){
+      sel.disabled=true;
+      sel.innerHTML=`<option disabled selected>Lütfen VLAN seçiniz</option>`;
+      grp.style.display="none";
     } else {
-      sel.disabled = false;
-      populateVlanOptions();
+      sel.disabled=false; populateVlanOptions();
     }
   }
   function toggleVlanInput(){
     const sel = document.getElementById("vlanSelect"),
           grp = document.getElementById("vlanCustomGroup");
-    if (sel.value==="custom") grp.style.display="flex";
+    if(sel.value==="custom") grp.style.display="flex";
     else { grp.style.display="none"; grp.querySelectorAll("input").forEach(i=>i.value=""); }
   }
   function populateVlanOptions(){
     const sel = document.getElementById("vlanSelect");
-    if (sel.disabled) return;
-    sel.innerHTML = `<option disabled selected>Lütfen VLAN seçiniz</option>`;
-    ["10","20","30"].forEach(v=>sel.append(new Option(v,v)));
+    if(sel.disabled) return;
+    sel.innerHTML=`<option disabled selected>Lütfen VLAN seçiniz</option>`;
+    ["10","20","30"].forEach(v=> sel.append(new Option(v,v)));
     sel.append(new Option("Özel VLAN","custom"));
   }
 
-  function disableForm() {
-    document.getElementById("newSsidFieldset").disabled = true;
-  }
+  function disableForm(){ document.getElementById("newSsidFieldset").disabled = true; }
+  function enableForm() { document.getElementById("newSsidFieldset").disabled = false; }
 </script>
-
 </body>
 </html>
