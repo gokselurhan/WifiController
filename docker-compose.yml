@@ -4,11 +4,11 @@ services:
   wifi-controller:
     build: .
     container_name: wifi-controller
-    restart: unless-stopped
     network_mode: host
+    restart: unless-stopped
     cap_add:
       - NET_ADMIN
       - SYS_ADMIN
     privileged: true
     volumes:
-      - ./hostapd.conf.template:/etc/hostapd/hostapd.conf.template
+      - .:/app
