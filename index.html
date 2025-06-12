@@ -366,6 +366,52 @@
       document.getElementById("vlanCustomDesc").value = "";
     }
   }
+let supportsMultipleAP = true;
+let activeInterfaces = [];
+
+function fetchStatusAndUpdateUI() {
+  fetch('/api/status')
+    .then(res => res.json())
+    .then(data => {
+      supportsMultipleAP = data.ap_limit;
+      activeInterfaces = data.active.map(x => x.iface);
+
+      const msg = document.getElementById("wifiWarning");
+      msg.innerHTML = '';
+
+      const selected = document.getElementById("wifiInterface").value;
+      if (!supportsMultipleAP) {
+        const warn = document.createElement('div');
+        warn.className = "alert alert-warning mt-2";
+        warn.innerText = "Bu cihaz aynı anda yalnızca 1 AP yayını destekliyor.";
+        msg.appendChild(warn);
+      }
+
+      if (activeInterfaces.includes(selected)) {
+        const form = document.getElementById("ssidForm");
+        form.classList.add("bg-light", "text-muted");
+        Array.from(form.querySelectorAll("input, select, button")).forEach(el => {
+          el.disabled = true;
+        });
+
+        const warn = document.createElement('div');
+        warn.className = "alert alert-info mt-2";
+        warn.innerText = "Bu arayüzde zaten bir SSID yayını var.";
+        msg.appendChild(warn);
+      } else {
+        const form = document.getElementById("ssidForm");
+        form.classList.remove("bg-light", "text-muted");
+        Array.from(form.querySelectorAll("input, select, button")).forEach(el => {
+          el.disabled = false;
+        });
+      }
+    });
+}
+
+document.getElementById("wifiInterface").addEventListener("change", () => {
+  fetchStatusAndUpdateUI();
+});
+
 </script>
 
 </body>
