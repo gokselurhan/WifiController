@@ -60,4 +60,4 @@ def manage_ssids():
             subprocess.run(["pkill", "hostapd"], check=False)
             subprocess.run(["hostapd", "-B", "/etc/hostapd/hostapd.conf"], check=False)
 
-            return jsonify({"message": "SSID
+            return jsonify({"message": "SSID"
