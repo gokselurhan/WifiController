@@ -1,9 +1,10 @@
 from flask import Flask, jsonify, request, send_from_directory
-import subprocess, os, json
+import subprocess
+import os
 
-app = Flask(__name__, static_url_path='', static_folder='.')
+app = Flask(__name__)
 
-SSID_FILE = '/etc/hostapd/hostapd.conf'
+SSID_FILE = "/etc/hostapd/hostapd.conf"
 
 @app.route('/')
 def index():
@@ -24,41 +25,39 @@ def manage_ssids():
         with open(SSID_FILE) as f:
             lines = f.readlines()
 
-        ssid = passphrase = iface = ''
-        enable = vlan = '1'
-        ssids = []
+        ssid = passphrase = iface = vlan = ''
+        enable = '1'
         for line in lines:
-            if 'interface=' in line:
-                iface = line.split('=')[1].strip()
-            if 'ssid=' in line:
-                ssid = line.split('=')[1].strip()
-            if 'wpa_passphrase=' in line:
-                passphrase = line.split('=')[1].strip()
+            if line.startswith("interface="): iface = line.strip().split("=")[1]
+            if line.startswith("ssid="): ssid = line.strip().split("=")[1]
+            if line.startswith("wpa_passphrase="): passphrase = line.strip().split("=")[1]
 
-        ssids.append({"ssid": ssid, "password": passphrase, "iface": iface, "enable": enable, "vlan": vlan})
-        return jsonify({"ssids": ssids})
+        return jsonify({
+            "ssids": [{
+                "ssid": ssid,
+                "password": passphrase,
+                "iface": iface,
+                "vlan": vlan if vlan else "Yok",
+                "enable": enable
+            }]
+        })
 
     elif request.method == 'POST':
-        data = request.json
-        with open('/etc/hostapd/hostapd.conf', 'w') as f:
-            f.write(f"interface={data['iface']}\n")
-            f.write("driver=nl80211\n")
-            f.write(f"ssid={data['ssid']}\n")
-            f.write("hw_mode=g\n")
-            f.write("channel=6\n")
-            f.write(f"wpa_passphrase={data['password']}\n")
-            f.write("wpa=2\n")
-            f.write("wpa_key_mgmt=WPA-PSK\n")
-            f.write("rsn_pairwise=CCMP\n")
+        try:
+            data = request.get_json(force=True)
 
-        subprocess.run(["systemctl", "restart", "hostapd"], check=False)
-        return jsonify({"message": "SSID oluşturuldu"}), 201
+            with open(SSID_FILE, 'w') as f:
+                f.write(f"interface={data['iface']}\n")
+                f.write("driver=nl80211\n")
+                f.write(f"ssid={data['ssid']}\n")
+                f.write("hw_mode=g\n")
+                f.write("channel=6\n")
+                f.write(f"wpa_passphrase={data['password']}\n")
+                f.write("wpa=2\n")
+                f.write("wpa_key_mgmt=WPA-PSK\n")
+                f.write("rsn_pairwise=CCMP\n")
 
-@app.route('/api/ssids/<int:index>', methods=['DELETE'])
-def delete_ssid(index):
-    open('/etc/hostapd/hostapd.conf', 'w').close()
-    subprocess.run(["systemctl", "stop", "hostapd"], check=False)
-    return jsonify({"message": "SSID silindi"}), 200
+            subprocess.run(["pkill", "hostapd"], check=False)
+            subprocess.run(["hostapd", "-B", "/etc/hostapd/hostapd.conf"], check=False)
 
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+            return jsonify({"message": "SSID
