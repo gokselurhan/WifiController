@@ -14,6 +14,7 @@ def index():
 def interfaces():
     result = subprocess.run("iw dev | awk '$1==\"Interface\"{print $2}'", shell=True, capture_output=True)
     interfaces = result.stdout.decode().strip().split("\n")
+    interfaces = [i for i in interfaces if i]  # Boşları çıkar
     return jsonify({"interfaces": interfaces})
 
 @app.route('/api/ssids', methods=['GET', 'POST'])
@@ -28,9 +29,12 @@ def manage_ssids():
         ssid = passphrase = iface = vlan = ''
         enable = '1'
         for line in lines:
-            if line.startswith("interface="): iface = line.strip().split("=")[1]
-            if line.startswith("ssid="): ssid = line.strip().split("=")[1]
-            if line.startswith("wpa_passphrase="): passphrase = line.strip().split("=")[1]
+            if line.startswith("interface="):
+                iface = line.strip().split("=")[1]
+            if line.startswith("ssid="):
+                ssid = line.strip().split("=")[1]
+            if line.startswith("wpa_passphrase="):
+                passphrase = line.strip().split("=")[1]
 
         return jsonify({
             "ssids": [{
@@ -58,7 +62,19 @@ def manage_ssids():
                 f.write("rsn_pairwise=CCMP\n")
 
             subprocess.run(["pkill", "hostapd"], check=False)
-            subprocess.run(["hostapd", "-B", "/etc/hostapd/hostapd.conf"], check=False)
+            subprocess.run(["hostapd", "-B", SSID_FILE], check=False)
 
             return jsonify({"message": "SSID eklendi"}), 201
 
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/api/ssids/<int:index>', methods=['DELETE'])
+def delete_ssid(index):
+    if os.path.exists(SSID_FILE):
+        os.remove(SSID_FILE)
+    subprocess.run(["pkill", "hostapd"], check=False)
+    return jsonify({"message": "SSID silindi"}), 200
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000)
