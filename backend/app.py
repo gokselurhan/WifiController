@@ -1,14 +1,14 @@
-#!/usr/bin/env python3
-from flask import Flask, jsonify, request
-import subprocess
+from flask import Flask, jsonify, request, send_from_directory
 import json
-import os
+import subprocess
 from wifi_manager import WifiManager
+import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../frontend/static')
+
 wifi_manager = WifiManager()
 
-# API endpoint'leri
+# API Endpoints
 @app.route('/api/interfaces', methods=['GET'])
 def get_interfaces():
     interfaces = wifi_manager.get_wifi_interfaces()
@@ -36,10 +36,14 @@ def delete_ssid(ssid_id):
     result = wifi_manager.delete_ssid(ssid_id)
     return jsonify({"success": result})
 
-# Frontend dosyalarını sun
+# Frontend Dosyaları
 @app.route('/')
 def serve_index():
-    return app.send_static_file('index.html')
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    return send_from_directory(app.static_folder, path)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80, debug=True)
+    app.run(host='0.0.0.0', port=80)
