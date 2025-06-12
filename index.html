@@ -15,18 +15,19 @@
       background: #fff;
       border: 1px solid #ccc;
       border-radius: 8px;
-      padding: 10px;
+      padding: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       z-index: 1000;
       min-width: 180px;
       min-height: 180px;
+      overflow: visible;
       visibility: hidden;
     }
     .qr-popup .close-btn {
       position: absolute;
-      top: 4px;
-      right: 6px;
-      font-size: 1rem;
+      top: -8px;
+      right: -8px;
+      font-size: 1.2rem;
       color: #888;
       background: none;
       border: none;
@@ -129,6 +130,7 @@
     document.getElementById("wifiInterface")
             .addEventListener("change", handleInterfaceChange);
     disableForm();
+    handleInterfaceChange();    // ← başlangıçta da mutlaka pasif kalsın
   });
 
   /*** API Çağrıları ***/
@@ -182,7 +184,6 @@
           <button class="btn btn-sm btn-warning me-2" onclick="alert('Parola: ${item.password}')">Parola Göster</button>
           <button class="btn btn-sm btn-danger" onclick="handleDeleteSsid(${idx})">Sil</button>
         </div>`;
-      // Düzenleme modu için
       if (isEditing && idx === editingIndex) {
         li.classList.add("list-group-item-editing");
         li.querySelectorAll("button").forEach(b=>b.disabled=true);
@@ -196,7 +197,6 @@
     const ssidInput = document.getElementById("ssid").value.trim();
     const password = document.getElementById("password").value.trim();
     const iface = document.getElementById("wifiInterface").value;
-    // VLAN hesaplama...
     let vlan = "";
     if (document.getElementById("noVlanCheckbox").checked) {
       vlan = "Yok";
@@ -215,7 +215,6 @@
       alert("SSID, parola ve kart seçimi zorunlu!");
       return;
     }
-    // Duplication kontrol
     const dup = ssidList.some((it,i)=>
       it.ssid.toLowerCase()===ssidInput.toLowerCase() &&
       !(isEditing && i===editingIndex)
@@ -252,7 +251,6 @@
     document.getElementById("password").value = it.password;
     document.getElementById("enable").value = it.enable;
     document.getElementById("wifiInterface").value = it.iface;
-    // VLAN ayarla
     if (it.vlan!=="Yok") {
       document.getElementById("noVlanCheckbox").checked=false;
       toggleVlanDisable();
@@ -269,8 +267,6 @@
       document.getElementById("noVlanCheckbox").checked=true;
       toggleVlanDisable();
     }
-
-    // Form başlığını ve buton metnini güncelle
     document.getElementById("formHeader").textContent = "SSID Düzenle";
     document.getElementById("applyBtn").textContent = "Güncelle";
     document.getElementById("cancelBtn").style.display = "inline-block";
@@ -283,7 +279,6 @@
     document.getElementById("formHeader").textContent = "Yeni SSID Ekle veya Düzenle";
     document.getElementById("applyBtn").textContent = "Ayarları Uygula";
     document.getElementById("cancelBtn").style.display = "none";
-    // Formu temizle
     document.getElementById("ssid").value = "";
     document.getElementById("password").value = "";
     document.getElementById("noVlanCheckbox").checked = true;
@@ -359,7 +354,6 @@
     const sel = document.getElementById("vlanSelect");
     if (sel.disabled) return;
     sel.innerHTML = `<option disabled selected>Lütfen VLAN seçiniz</option>`;
-    // Örnek default VLAN'lar:
     ["10","20","30"].forEach(v=>{
       sel.appendChild(new Option(v,v));
     });
@@ -381,7 +375,6 @@
     if (isEditing) {
       enableForm(); return;
     }
-    // Eğer bu kartta zaten SSID varsa formu pasif yap ve uyar
     const taken = ssidList.some(it=>it.iface === iface);
     if (taken) {
       warn.textContent = "Bu cihaz aynı anda yalnızca 1 SSID yayınına izin veriyor veya bu karta zaten atanmış SSID var.";
