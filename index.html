@@ -10,6 +10,7 @@
     .card { margin-bottom: 30px; }
     .qrcode { margin-top: 10px; }
 
+    /* QR-Göster popup kutusu */
     .qr-popup {
       position: absolute;
       background: #fff;
@@ -36,10 +37,14 @@
     }
     .qr-popup .close-btn:hover { color: #e22; }
 
+    /* Düzenleme modundaki satır stili */
     .list-group-item-editing {
       background-color: #e9ecef;
       opacity: 0.7;
     }
+
+    /* Liste satırının relative olması, popup'ı konumlamak için */
+    #ssidList li { position: relative; }
   </style>
 </head>
 <body>
@@ -314,7 +319,7 @@
   }
 
   function showQrModal(btn, ssid, pwd) {
-    closeAnyPopup();
+    closeAnyPopup();  
     const li    = btn.closest("li"),
           popup = document.createElement("div");
     popup.className = "qr-popup";
