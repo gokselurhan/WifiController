@@ -5,16 +5,10 @@ services:
     build: .
     container_name: wifi-controller
     restart: unless-stopped
-    ports:
-      - "80:80"
-    network_mode: "host"
-    privileged: true
-    volumes:
-      - /etc/netplan:/etc/netplan:ro
-      - /var/run/dbus:/var/run/dbus
-      - /run/dbus:/run/dbus
+    network_mode: host
     cap_add:
       - NET_ADMIN
-      - NET_RAW
-    environment:
-      - PYTHONUNBUFFERED=1
+      - SYS_ADMIN
+    privileged: true
+    volumes:
+      - ./hostapd.conf.template:/etc/hostapd/hostapd.conf.template
