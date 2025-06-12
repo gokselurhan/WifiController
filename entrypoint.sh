@@ -1,16 +1,17 @@
 #!/bin/bash
 
-# Kernel seviyesinde NAT routing ve forwarding açık mı
+# IPv4 forwarding aktif et
 sysctl -w net.ipv4.ip_forward=1
 
-# iptables NAT
+# NAT (kablosuzdan geleni kabloluya yönlendirmek için)
 iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
-# İlk başta hostapd config yoksa başlatılmasın
-if [ ! -f /etc/hostapd/hostapd.conf ]; then
-  echo "hostapd config /etc/hostapd/hostapd.conf not found, not starting hostapd.."
-else
+# hostapd varsa başlat
+if [ -f /etc/hostapd/hostapd.conf ]; then
   hostapd -B /etc/hostapd/hostapd.conf
+else
+  echo "hostapd config dosyası yok, hostapd başlatılmadı."
 fi
 
+# Flask uygulamasını başlat
 python app.py
