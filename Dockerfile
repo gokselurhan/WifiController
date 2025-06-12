@@ -1,31 +1,18 @@
-# Python tabanlı imaj
-FROM python:3.9-slim
+FROM python:3.11-slim
 
-# Gerekli sistem paketleri
 RUN apt-get update && apt-get install -y \
-    hostapd \
-    dnsmasq \
-    iw \
-    net-tools \
-    wpasupplicant \
+    hostapd iproute2 iw net-tools iptables \
     && rm -rf /var/lib/apt/lists/*
 
-# Çalışma dizini oluştur
 WORKDIR /app
 
-# Python bağımlılıklarını yükle
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Uygulama dosyalarını kopyala
-COPY backend /app/backend
-COPY frontend /app/frontend
+COPY . .
 
-# Konfigürasyon dizinleri
-RUN mkdir -p /etc/hostapd /etc/dnsmasq.d
+RUN chmod +x entrypoint.sh
 
-# Port aç
-EXPOSE 80
+EXPOSE 5000
 
-# Uygulamayı başlat
-CMD ["python", "-m", "backend.app"]
+ENTRYPOINT ["./entrypoint.sh"]
