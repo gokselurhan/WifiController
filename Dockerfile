@@ -1,24 +1,31 @@
-# Dockerfile
+# Python tabanlı bir imaj kullanıyoruz
+FROM python:3.9-slim
 
-FROM node:18-slim
+# Sistem güncellemeleri ve gerekli paketler
+RUN apt-get update && apt-get install -y \
+    hostapd \
+    dnsmasq \
+    iw \
+    net-tools \
+    wpasupplicant \
+    && rm -rf /var/lib/apt/lists/*
 
-
-RUN apt-get update && \
-    apt-get install -y hostapd wireless-tools iw iproute2 && \
-    rm -rf /var/lib/apt/lists/*
-
-
+# Uygulama dizini oluştur
 WORKDIR /app
 
+# Backend bağımlılıklarını kopyala ve yükle
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY package.json ./
-RUN npm install
+# Uygulama dosyalarını kopyala
+COPY backend/ /app/backend/
+COPY frontend/ /app/frontend/
 
+# Hostapd ve dnsmasq konfigürasyonları için dizin
+RUN mkdir -p /etc/hostapd /etc/dnsmasq.d
 
-COPY . .
+# Port bilgisi
+EXPOSE 80
 
-
-EXPOSE 3000
-
-
-CMD ["node", "server.js"]
+# Uygulamayı çalıştır
+CMD ["python", "-m", "backend.app"]
