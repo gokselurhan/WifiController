@@ -1,0 +1,9 @@
+interface={{ interface }}
+driver=nl80211
+ssid={{ ssid }}
+hw_mode=g
+channel=6
+wpa_passphrase={{ password }}
+wpa=2
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
