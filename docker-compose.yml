@@ -1,16 +1,16 @@
 version: '3.8'
+
 services:
-  ap:
+  wifi-controller:
     build: .
-    container_name: wifi-ap
+    container_name: wifi-controller
     network_mode: host
+    restart: unless-stopped
     cap_add:
       - NET_ADMIN
+      - SYS_ADMIN
+    privileged: true
+    volumes:
+      - .:/app
     environment:
       - UPLINK_IFACE=${UPLINK_IFACE:-eth0}
-    volumes:
-      - ./hostapd.conf:/etc/hostapd/hostapd.conf
-      - ./dnsmasq.conf:/etc/dnsmasq.conf
-      - ./entrypoint.sh:/entrypoint.sh
-    entrypoint: ["/entrypoint.sh"]
-    restart: unless-stopped
