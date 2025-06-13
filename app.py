@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, send_from_directory
 import subprocess
 import os
+import re
 
 app = Flask(__name__)
 
@@ -29,9 +30,19 @@ def check_ap_limit():
 def index():
     return send_from_directory('.', 'index.html')
 
+@app.route('/api/uplinks')
+def get_uplinks():
+    # /sys/class/net altındaki eth* veya enp* ile başlayanları listeler
+    all_ifaces = os.listdir('/sys/class/net')
+    uplinks = [i for i in all_ifaces if i.startswith('eth') or i.startswith('enp')]
+    return jsonify({"uplinks": uplinks})
+
 @app.route('/api/interfaces')
 def interfaces():
-    result = subprocess.run("iw dev | awk '$1==\"Interface\"{print $2}'", shell=True, capture_output=True)
+    result = subprocess.run(
+        "iw dev | awk '$1==\"Interface\"{print $2}'",
+        shell=True, capture_output=True
+    )
     interfaces = result.stdout.decode().strip().split("\n")
     interfaces = [i for i in interfaces if i]
     return jsonify({"interfaces": interfaces})
@@ -41,10 +52,8 @@ def manage_ssids():
     if request.method == 'GET':
         if not os.path.exists(SSID_FILE):
             return jsonify({"ssids": []})
-
         with open(SSID_FILE) as f:
             lines = f.readlines()
-
         ssid = passphrase = iface = vlan = ''
         enable = '1'
         for line in lines:
@@ -54,7 +63,6 @@ def manage_ssids():
                 ssid = line.strip().split("=")[1]
             if line.startswith("wpa_passphrase="):
                 passphrase = line.strip().split("=")[1]
-
         return jsonify({
             "ssids": [{
                 "ssid": ssid,
@@ -68,12 +76,10 @@ def manage_ssids():
     elif request.method == 'POST':
         try:
             data = request.get_json(force=True)
-
             password = data.get('password', '')
             if not (8 <= len(password) <= 63):
                 return jsonify({"error": "Parola 8 ile 63 karakter arasında olmalıdır."}), 400
-
-            # Tek SSID desteği varsa ve zaten kayıtlı varsa ikinciyi engelle
+            # Tek SSID desteği varsa ve zaten kayıtlıysa engelle
             if not check_ap_limit() and os.path.exists(SSID_FILE):
                 return jsonify({"error": "Bu cihaz aynı anda yalnızca 1 SSID yayınına izin veriyor."}), 400
 
@@ -90,7 +96,6 @@ def manage_ssids():
 
             subprocess.run(["pkill", "hostapd"], check=False)
             subprocess.run(["hostapd", "-B", SSID_FILE], check=False)
-
             return jsonify({"message": "SSID eklendi"}), 201
 
         except Exception as e:
