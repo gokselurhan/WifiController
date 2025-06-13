@@ -1,17 +1,21 @@
 #!/bin/bash
+set -e
 
-# IPv4 forwarding aktif et
+# IPv4 forwarding
 sysctl -w net.ipv4.ip_forward=1
 
-# NAT (kablosuzdan geleni kabloluya yönlendirmek için)
-iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+# Uplink arayüzü (env ile gelir, yoksa eth0)
+UPLINK_IFACE=${UPLINK_IFACE:-eth0}
 
-# hostapd varsa başlat
+# NAT: wlan0 → uplink
+iptables -t nat -A POSTROUTING -o "$UPLINK_IFACE" -j MASQUERADE
+
+# Hostapd başlat (varsa)
 if [ -f /etc/hostapd/hostapd.conf ]; then
   hostapd -B /etc/hostapd/hostapd.conf
 else
-  echo "hostapd config dosyası yok, hostapd başlatılmadı."
+  echo "hostapd config yok. Atlanıyor."
 fi
 
-# Flask uygulamasını başlat
-python app.py
+# Flask API’yi başlat
+exec python app.py
