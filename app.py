@@ -4,107 +4,114 @@ import os
 
 app = Flask(__name__)
 
-SSID_FILE = "/etc/hostapd/hostapd.conf"
+SSID_DOSYA = "/etc/hostapd/hostapd.conf"
 
-def check_ap_limit():
-    """Cihazın birden fazla AP (access point) desteğini kontrol eder."""
+def sinirli_ap_destegi_var_mi():
+    """
+    Cihazın birden fazla access point desteğini kontrol eder.
+    Eğer "{ AP } <= 1" kısıtlaması varsa sadece 1 AP desteklenir.
+    """
     try:
         result = subprocess.run(
             "iw list", shell=True, capture_output=True, text=True
         )
         lines = result.stdout.splitlines()
-        combo_section = False
-        for line in lines:
-            if "valid interface combinations" in line:
-                combo_section = True
-            elif combo_section:
-                compact = line.replace(" ", "")
-                if "AP" in line:
-                    return not ("AP}<=1" in compact)
+        bul = False
+        for satir in lines:
+            if "valid interface combinations" in satir:
+                bul = True
+            elif bul and "AP" in satir:
+                komp = satir.replace(" ", "")
+                return not ("AP}<=1" in komp)
         return True
-    except Exception:
+    except:
         return True
 
 @app.route('/')
 def index():
+    # index.html dosyasını sunar
     return send_from_directory('.', 'index.html')
 
 @app.route('/api/interfaces')
-def wifi_interfaces():
+def wifi_arayuzleri():
     """Sistemdeki Wi-Fi arayüzlerini döner."""
     try:
         result = subprocess.run(
             "iw dev | awk '$1==\"Interface\"{print $2}'",
             shell=True, capture_output=True, text=True
         )
-        interfaces = [l for l in result.stdout.splitlines() if l.strip()]
-    except Exception:
-        interfaces = []
-    return jsonify({"interfaces": interfaces})
+        arayuzler = [l for l in result.stdout.splitlines() if l.strip()]
+    except:
+        arayuzler = []
+    return jsonify({"interfaces": arayuzler})
 
 @app.route('/api/ethinterfaces')
-def eth_interfaces():
+def tum_ag_arayuzleri():
     """
-    Loopback, docker0, tun*, br-* vs. dahil olmak üzere 
-    /sys/class/net altındaki tüm arayüzleri listeler ve
-    her birine açıklama (description) ekler.
+    /sys/class/net altındaki tüm ağ arayüzlerini (lo dahil)
+    isim ve açıklama ile döner.
     """
     try:
-        all_ifaces = sorted(os.listdir('/sys/class/net'))
+        tum = sorted(os.listdir('/sys/class/net'))
     except Exception as e:
-        print("Error listing interfaces:", e)
-        all_ifaces = []
+        print("Arayüz listeleme hatası:", e)
+        tum = []
 
-    def describe(iface: str) -> str:
+    def aciklama(iface: str) -> str:
         if iface == 'lo':
-            return 'Loopback interface'
+            return 'Döngü arayüzü (loopback)'
         if iface.startswith(('wl','wlan','wlp')):
-            return 'Wireless (Wi-Fi) interface'
+            return 'Kablosuz (Wi-Fi) arayüz'
         if iface.startswith(('eth','enp','ens','eno','enx')):
-            return 'Physical Ethernet interface'
+            return 'Fiziksel Ethernet arayüzü'
         if iface == 'docker0':
-            return 'Docker bridge network'
+            return 'Docker köprü ağı'
         if iface.startswith('br-'):
-            return 'Bridge network interface'
+            return 'Köprü (bridge) arayüz'
         if iface.startswith('veth'):
-            return 'Virtual Ethernet (container link)'
+            return 'Sanal Ethernet (container bağlantısı)'
         if iface.startswith('tun'):
-            return 'TUN/TAP VPN interface'
+            return 'TUN/TAP VPN arayüzü'
         if iface.startswith('wg'):
-            return 'WireGuard VPN interface'
+            return 'WireGuard VPN arayüzü'
         if iface.startswith('virbr'):
-            return 'Libvirt virtual bridge'
-        # gerekirse buraya yeni pattern’ler ekleyebilirsiniz
-        return 'Unknown interface'
+            return 'Libvirt köprü arayüzü'
+        return 'Bilinmeyen arayüz'
 
-    uplink_ifaces = [
-        {"name": iface, "description": describe(iface)}
-        for iface in all_ifaces
+    uplink_arayuzleri = [
+        {"name": i, "description": aciklama(i)}
+        for i in tum
     ]
-
-    return jsonify({"interfaces": uplink_ifaces})
+    return jsonify({"interfaces": uplink_arayuzleri})
 
 @app.route('/api/ssids', methods=['GET', 'POST'])
-def manage_ssids():
+def ssid_yonetimi():
+    """
+    GET  -> Mevcut SSID konfigürasyonlarını döner.
+    POST -> Yeni SSID ekler veya var olanı günceller.
+    """
     if request.method == 'GET':
-        if not os.path.exists(SSID_FILE):
+        if not os.path.exists(SSID_DOSYA):
             return jsonify({"ssids": []})
-        with open(SSID_FILE) as f:
-            lines = f.readlines()
-        # TODO: hostapd.conf parse edip gerçek ssid listesini döndürün
+        with open(SSID_DOSYA) as f:
+            satirlar = f.readlines()
+        # TODO: hostapd.conf içeriğini parse edip gerçek SSID listesini döndürün
         return jsonify({"ssids": []})
-
-    # POST ile yeni/güncelleme
-    data = request.json or {}
-    # TODO: data['ssid'], data['password'], data['vlan'] vs. kaydedin
-    return jsonify({"message": "SSID eklendi/güncellendi"}), 201
+    else:
+        # TODO: request.json içinden ssid, password, vlan bilgilerini alıp kaydedin
+        return jsonify({"message": "SSID eklendi/güncellendi"}), 201
 
 @app.route('/api/ssids/<int:index>', methods=['DELETE'])
-def delete_ssid(index):
-    if os.path.exists(SSID_FILE):
-        os.remove(SSID_FILE)
+def ssid_sil(index):
+    """
+    Belirtilen indeksteki SSID’i siler.
+    (Örnek olarak tüm hostapd.conf’u siliyor, ihtiyaca göre değiştirin.)
+    """
+    if os.path.exists(SSID_DOSYA):
+        os.remove(SSID_DOSYA)
     subprocess.run(["pkill", "hostapd"], check=False)
     return jsonify({"message": "SSID silindi"}), 200
 
 if __name__ == '__main__':
+    # Host ağında 0.0.0.0 üzerinden dinle
     app.run(host="0.0.0.0", port=5000)
