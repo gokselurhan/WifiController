@@ -10,14 +10,9 @@
     .card { margin-bottom: 30px; }
     .qrcode { margin-top: 10px; }
     .qr-popup {
-      position: absolute;
-      background: #fff;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      z-index: 1000;
-      visibility: hidden;
+      position: absolute; background: #fff; border: 1px solid #ccc;
+      border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 1000; visibility: hidden;
     }
     .qr-popup .close-btn {
       position: absolute; top: 8px; right: 8px;
@@ -102,7 +97,10 @@
       fetchWifiArayuzleri();
       fetchUplinkArayuzleri();
       fetchSsids();
+
       document.getElementById('wifiInterface')
+              .addEventListener('change', onInterfaceChange);
+      document.getElementById('uplinkInterface')
               .addEventListener('change', onInterfaceChange);
     });
 
@@ -118,13 +116,35 @@
       document.getElementById('vlanCustomGroup').style.display = noVlan ? 'none' : 'flex';
     }
 
+    // Wi-Fi kartı veya uplink değiştiğinde çağrılır
+    function onInterfaceChange() {
+      const wifi = document.getElementById('wifiInterface').value;
+      const uplink = document.getElementById('uplinkInterface').value;
+      const warning = document.getElementById('interfaceWarning');
+
+      if (wifi) {
+        enableForm();
+        // uplink seçimi zorunlu değil ama uyarı gösterelim
+        if (!uplink) {
+          warning.textContent = 'Uplink arayüzü seçilmedi, internet çıkışı olmayabilir.';
+        } else {
+          warning.textContent = '';
+        }
+      } else {
+        disableForm();
+        warning.textContent = '';
+      }
+    }
+
     function fetchWifiArayuzleri() {
       fetch('/api/interfaces')
         .then(r => r.json())
         .then(data => {
           const sel = document.getElementById('wifiInterface');
           sel.innerHTML = '<option disabled selected>Seçin…</option>';
-          data.interfaces.forEach(iface => sel.append(new Option(iface, iface)));
+          data.interfaces.forEach(iface =>
+            sel.append(new Option(iface, iface))
+          );
         })
         .catch(err => console.error('Wi-Fi arayüzleri yüklenirken hata:', err));
     }
@@ -158,12 +178,11 @@
         .catch(err => console.error('SSID listesi yüklenirken hata:', err));
     }
 
-    // Aşağıdaki fonksiyonları kendi iş mantığınıza göre tamamlayın:
-    function renderList() { /* SSID listesini göster */ }
-    function populateVlanOptions() { /* VLAN seçeneklerini doldur */ }
-    function onInterfaceChange()  { /* Wi-Fi kartı değiştiğinde */ }
-    function handleAddSsid()      { /* Yeni SSID ekle/güncelle */ }
-    function cancelEdit()         { /* Düzenlemeyi iptal et */ }
+    // Aşağıdaki işlevleri kendi kodunuza göre tamamlayın:
+    function renderList()      { /* ... */ }
+    function populateVlanOptions() { /* ... */ }
+    function handleAddSsid()   { /* ... */ }
+    function cancelEdit()      { /* ... */ }
   </script>
 </body>
 </html>
