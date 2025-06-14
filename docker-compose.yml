@@ -2,9 +2,11 @@ version: '3.8'
 
 services:
   wifi-controller:
-    build: .
+    build:
+      context: .
+      network: host       # Build sırasında host ağını kullan
     container_name: wifi-controller
-    network_mode: host
+    network_mode: host   # Runtime’da host ağını kullan
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
