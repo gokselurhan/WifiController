@@ -10,9 +10,14 @@
     .card { margin-bottom: 30px; }
     .qrcode { margin-top: 10px; }
     .qr-popup {
-      position: absolute; background: #fff; border: 1px solid #ccc;
-      border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      z-index: 1000; visibility: hidden;
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 1000;
+      visibility: hidden;
     }
     .qr-popup .close-btn {
       position: absolute; top: 8px; right: 8px;
@@ -84,7 +89,8 @@
               <label class="form-check-label" for="noVlanCheckbox">VLAN yok</label>
             </div>
             <select id="vlanSelect" class="form-select" disabled>
-              <option value="" disabled selected>Seçin…</option>
+              <option value="Yok" selected>Yok</option>
+              <option value="custom">Özel VLAN</option>
             </select>
             <div id="vlanCustomGroup" class="d-flex mt-2" style="display:none; gap:.5rem;">
               <input type="text" id="vlanCustomId" class="form-control" placeholder="VLAN ID">
@@ -122,6 +128,7 @@
     function enableForm() {
       document.getElementById('newSsidFieldset').disabled = false;
     }
+
     function toggleVlanDisable() {
       const noVlan = document.getElementById('noVlanCheckbox').checked;
       document.getElementById('vlanSelect').disabled = noVlan;
@@ -179,8 +186,6 @@
         .then(data => {
           ssidList = data.ssids;
           renderList();
-          populateVlanOptions();
-          onInterfaceChange();
         })
         .catch(e => console.error(e));
     }
@@ -246,9 +251,10 @@
       const ul = document.getElementById("ssidList");
       ul.innerHTML = "";
       if (!ssidList.length) {
-        ul.innerHTML = `<li class="list-group-item fst-italic text-muted">
-                          Henüz tanımlı SSID yok
-                        </li>`;
+        ul.innerHTML = `
+          <li class="list-group-item fst-italic text-muted">
+            Henüz tanımlı SSID yok
+          </li>`;
         return;
       }
       ssidList.forEach((it, idx) => {
@@ -261,30 +267,13 @@
             (Kart: ${it.iface})
           </div>
           <div>
-            <button class="btn btn-sm btn-primary me-2" onclick="startEditSsid(${idx})">
-              Düzenle
-            </button>
-            <button class="btn btn-sm btn-secondary me-2"
-                    onclick="showQrModal('${it.ssid}','${it.password}')">
-              QR Göster
-            </button>
-            <button class="btn btn-sm btn-warning me-2"
-                    onclick="alert('Parola: ${it.password}')">
-              Parola Göster
-            </button>
-            <button class="btn btn-sm btn-danger" onclick="deleteSsid(${idx})">
-              Sil
-            </button>
+            <button class="btn btn-sm btn-primary me-2" onclick="startEditSsid(${idx})">Düzenle</button>
+            <button class="btn btn-sm btn-secondary me-2" onclick="showQrModal('${it.ssid}','${it.password}')">QR Göster</button>
+            <button class="btn btn-sm btn-warning me-2" onclick="alert('Parola: ${it.password}')">Parola Göster</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteSsid(${idx})">Sil</button>
           </div>`;
         ul.append(li);
       });
-    }
-
-    function populateVlanOptions() {
-      const sel = document.getElementById("vlanSelect");
-      sel.innerHTML = `<option value="Yok">Yok</option>
-                       <option value="custom">Özel VLAN</option>`;
-      // gerekiyorsa burada ek seçenekler ekleyebilirsiniz
     }
 
     function startEditSsid(idx) {
@@ -294,14 +283,14 @@
       document.getElementById("password").value = it.password;
       document.getElementById("enable").value   = it.enable;
       document.getElementById("wifiInterface").value = it.iface;
-      // VLAN doluysa
       if (it.vlan!=="Yok") {
         document.getElementById("noVlanCheckbox").checked = false;
         toggleVlanDisable();
-        if (it.vlan==="Özel VLAN") {
+        if (it.vlan.includes(" - ")) {
           document.getElementById("vlanSelect").value = "custom";
-          document.getElementById("vlanCustomId").value   = it.vlan.split(" - ")[0];
-          document.getElementById("vlanCustomDesc").value = it.vlan.split(" - ")[1];
+          const parts = it.vlan.split(" - ");
+          document.getElementById("vlanCustomId").value = parts[0];
+          document.getElementById("vlanCustomDesc").value = parts[1];
         } else {
           document.getElementById("vlanSelect").value = it.vlan;
         }
@@ -333,7 +322,6 @@
     }
 
     function showQrModal(ssid, pwd) {
-      // Basit modal yerine alert de kullanabilirsiniz
       alert(`SSID: ${ssid}\nParola: ${pwd}`);
     }
   </script>
