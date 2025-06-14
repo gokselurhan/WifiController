@@ -12,5 +12,3 @@ services:
     privileged: true
     volumes:
       - .:/app
-    environment:
-      - UPLINK_IFACE=${UPLINK_IFACE:-eth0}
