@@ -3,13 +3,19 @@ version: '3.8'
 services:
   wifi-controller:
     build: .
-    network_mode: host     # doğrudan host ağını kullanır
-    cap_add: [NET_ADMIN]   
+    container_name: wifi-controller
+    network_mode: host
     privileged: true
+    cap_add:
+      - NET_ADMIN
     volumes:
       - .:/app
     environment:
+      # Uplink arayüzünüzü burada ayarlayın:
       - UPLINK_IFACE=ens192
-      - DHCP_SERVER=192.168.1.1   # modeminizin DHCP IP’si
+      # SSID / kanal vs:
       - SSID=MyAP
       - CHANNEL=6
+      # İsteğe bağlı: birden fazla SSID isterseniz
+      # - GUEST_SSID=GuestAP
+      # - GUEST_BRIDGE=br_guest
