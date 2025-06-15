@@ -105,7 +105,6 @@ def manage_ssids():
         f.write("rsn_pairwise=CCMP\n")
 
     # ─────────── YAYINI BAŞLAT ───────────
-    # Çalışan hostapd'yi durdur ve yeni konfig ile yeniden başlat
     subprocess.run(["pkill", "hostapd"], check=False)
     subprocess.run(["hostapd", "-B", SSID_FILE], check=False)
     # ──────────────────────────────────────
@@ -121,5 +120,4 @@ def delete_ssid(index):
     return jsonify({"message":"SSID silindi ve yayını durdurdu"}), 200
 
 if __name__ == '__main__':
--   app.run()
-+   app.run(host='0.0.0.0', port=5000)
+    app.run(host="0.0.0.0", port=5000)
