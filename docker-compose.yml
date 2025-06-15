@@ -9,6 +9,7 @@ services:
     volumes:
       - .:/app
     environment:
+      - UPLINK_IFACE=ens192
       - DHCP_SERVER=192.168.1.1   # modeminizin DHCP IP’si
       - SSID=MyAP
       - CHANNEL=6
