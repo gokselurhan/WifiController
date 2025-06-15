@@ -3,15 +3,12 @@ version: '3.8'
 services:
   wifi-controller:
     build: .
-    container_name: wifi-controller
-    network_mode: host         # Host ağını kullan
-    restart: unless-stopped
+    network_mode: host     # doğrudan host ağını kullanır
+    cap_add: [NET_ADMIN]   
     privileged: true
-    cap_add:
-      - NET_ADMIN
-      - SYS_ADMIN
     volumes:
       - .:/app
     environment:
-      - SSID=MyAP             # Dilediğiniz SSID ile değiştirin
-      - CHANNEL=6             # Dilediğiniz kanalı verin
+      - DHCP_SERVER=192.168.1.1   # modeminizin DHCP IP’si
+      - SSID=MyAP
+      - CHANNEL=6
