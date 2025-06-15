@@ -1,40 +1,51 @@
 #!/usr/bin/env bash
 set -e
 
-echo ">>> Entrypoint başlatıldı"
+BRIDGE=${BRIDGE:-br0}
+UPLINK=${UPLINK_IFACE:-ens192}
+WIFI_IFACE=${WIFI_IFACE:-wls160}
 
-# 1) Arayüzlerin isimlerini al
-UPLINK_IFACE=${UPLINK_IFACE:-$(ip route show default | awk '{print $5; exit}')}
-WIFI_IFACE=${WIFI_IFACE:-$(iw dev | awk '$1=="Interface"{print $2; exit}')}
+echo ">>> Bridge: $BRIDGE, Uplink: $UPLINK, Wi-Fi: $WIFI_IFACE"
 
-echo "Uplink iface: $UPLINK_IFACE"
-echo "Wi-Fi iface: $WIFI_IFACE"
+# 1) Bridge oluştur (varsa hata vermez)
+ip link add name "$BRIDGE" type bridge 2>/dev/null || true
+ip link set dev "$BRIDGE" up
 
-# 2) Arayüzleri mutlaka 'up' yap
-ip link set dev "$UPLINK_IFACE" up
+# 2) Önce eski köprülemeyi kaldır (eğer önceden master yapılmışlarsa)
+for IF in $(bridge link | awk -v br="$BRIDGE" '$1==br{print $4}'); do
+  ip link set dev "$IF" nomaster
+done
+
+# 3) Uplink ve Wi-Fi’ı bridge’e ekle
+ip link set dev "$UPLINK" up
 ip link set dev "$WIFI_IFACE" up
+ip link set dev "$UPLINK" master "$BRIDGE"
+ip link set dev "$WIFI_IFACE" master "$BRIDGE"
 
-# 3) hostapd.conf oluştur
+# 4) hostapd.conf hazırla (tek SSID örnek)
 cat > /etc/hostapd/hostapd.conf <<EOF
 interface=$WIFI_IFACE
 driver=nl80211
-ssid=${SSID:-MyAP}
+ssid=${SSID}
 hw_mode=g
-channel=${CHANNEL:-6}
-wmm_enabled=1
+channel=${CHANNEL}
+bridge=$BRIDGE
 EOF
 
-# 4) hostapd’i başlat
-echo ">>> hostapd başlatılıyor"
+# 5) Hostapd başlat
+echo ">>> Starting hostapd…"
 hostapd -B /etc/hostapd/hostapd.conf
 
-# 5) Upstream DHCP sunucusunu otomatik bul
-UPSTREAM_DHCP=${DHCP_SERVER:-$(ip route show default | awk '/default/ {print $3; exit}')}
+# 6) (İsteğe bağlı) Ek bir Guest SSID isterseniz,
+#    hostapd multi-BSS ile şöyle ekleyebilirsiniz:
+# bridge=$GUEST_BRIDGE
+# bss=$WIFI_IFACE-guest
+# ssid=$GUEST_SSID
+#
+# Aynı mantıkla başka köprüler (br_guest vb) da entrypoint’te 
+# ip link add …, ip link set nomaster/ master …  
+# ve hostapd.conf’a bss blokları ile eklenir.
 
-echo ">>> DHCP Relay: dinle [$WIFI_IFACE] + [$UPLINK_IFACE] → upstream $UPSTREAM_DHCP"
-# 6) dhcrelay’i hem AP hem uplink üzerinde dinleyecek şekilde başlat
-dhcrelay -i "$WIFI_IFACE" -i "$UPLINK_IFACE" "$UPSTREAM_DHCP" &
-
-# 7) Flask API
-echo ">>> Flask API başlatılıyor"
-exec python app.py
+# 7) Flask API başlat
+echo ">>> Starting Flask…"
+exec python app.py --host=0.0.0.0 --port=5000
