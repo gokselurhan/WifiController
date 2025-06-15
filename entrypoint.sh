@@ -1,45 +1,29 @@
 #!/usr/bin/env bash
 set -e
 
-echo ">>> Entrypoint başlatıldı"
-
-# 1) Arayüzleri tespit et
-UPLINK_IFACE=${UPLINK_IFACE:-$(ip route show default | awk '{print $5; exit}')}
+# AP arayüzü
 WIFI_IFACE=${WIFI_IFACE:-$(iw dev | awk '$1=="Interface"{print $2; exit}')}
 
-echo "Uplink: $UPLINK_IFACE, Wi-Fi: $WIFI_IFACE"
+# Upstream DHCP sunucusu (modem IP’si)
+UPSTREAM_DHCP=${DHCP_SERVER:-$(ip route show default | awk '/default/ {print $3}')}
 
-# 2) IP forwarding aç
-sysctl -w net.ipv4.ip_forward=1 || true
-
-# 3) iptables NAT kuralı
-iptables -t nat -F
-iptables -t nat -A POSTROUTING -o "$UPLINK_IFACE" -j MASQUERADE
-
-# 4) dnsmasq konfigürasyonu (AP ağına DHCP)
-cat > /etc/dnsmasq.conf <<EOF
-interface=$WIFI_IFACE
-dhcp-range=192.168.50.10,192.168.50.200,12h
-dhcp-option=3,192.168.50.1
-EOF
-
-echo ">>> dnsmasq başlatılıyor"
-dnsmasq --keep-in-foreground --conf-file=/etc/dnsmasq.conf &
-sleep 1
-
-# 5) hostapd konfigürasyonu
+# 1) hostapd.conf — br0 ile birlikte çalışacak
 cat > /etc/hostapd/hostapd.conf <<EOF
 interface=$WIFI_IFACE
 driver=nl80211
-ssid=${SSID}
+ssid=${SSID:-MyAP}
 hw_mode=g
-channel=${CHANNEL}
+channel=${CHANNEL:-6}
 wmm_enabled=1
+bridge=br0
 EOF
 
-echo ">>> hostapd başlatılıyor"
-hostapd -B /etc/hostapd/hostapd.conf || echo "Uyarı: hostapd başlatılamadı"
+# 2) hostapd başlat
+hostapd -B /etc/hostapd/hostapd.conf
 
-# 6) Flask API
-echo ">>> Flask API başlatılıyor"
+# 3) DHCP relay başlat
+echo ">>> DHCP relay: $WIFI_IFACE → $UPSTREAM_DHCP"
+dhcrelay -i "$WIFI_IFACE" "$UPSTREAM_DHCP" &
+
+# 4) Flask API
 exec python app.py
