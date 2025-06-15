@@ -2,15 +2,16 @@ version: '3.8'
 
 services:
   wifi-controller:
-    build:
-      context: .
-      network: host       # Build sırasında host ağını kullan
+    build: .
     container_name: wifi-controller
-    network_mode: host   # Runtime’da host ağını kullan
+    network_mode: host         # Host ağını kullan
     restart: unless-stopped
+    privileged: true
     cap_add:
       - NET_ADMIN
       - SYS_ADMIN
-    privileged: true
     volumes:
       - .:/app
+    environment:
+      - SSID=MyAP             # Dilediğiniz SSID ile değiştirin
+      - CHANNEL=6             # Dilediğiniz kanalı verin
