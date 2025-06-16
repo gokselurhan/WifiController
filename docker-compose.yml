@@ -4,11 +4,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # artık host network’e girmiyoruz, kendi bridge’inde kalacak:
-    # network_mode: host  
+    # artık host network’e dokunmuyoruz, bridge ve relay'i flag ile tetikleyeceğiz
     ports:
       - "5000:5000"
-    privileged: true     # network komutlarına izinlere ihtiyaç var ama host’u *iptal* etmez
+    privileged: true
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -17,6 +16,6 @@ services:
       - UPLINK=ens192
       - WIFI_IFACE=wls160
       - BRIDGE=br0
-      - START_NETWORK=no   # <-- Varsayılan: ağ setup’u çalışmaz
+      - START_NETWORK=no   # <-- normalde network setup'u atlıyor
     volumes:
       - /etc/hostapd:/etc/hostapd:ro
