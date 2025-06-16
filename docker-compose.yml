@@ -1,24 +1,14 @@
 version: '3.8'
+
 services:
   wifi-controller:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # port 5000'ü dışarı açıyoruz
-    ports:
-      - "5000:5000"
-    privileged: true
+    build: .
+    container_name: wifi-controller
+    network_mode: host
+    restart: unless-stopped
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
-    environment:
-      - FLASK_ENV=production
-      - UPLINK=ens192
-      - WIFI_IFACE=wls160
-      - BRIDGE=br0
-      - START_NETWORK=no
+      - SYS_ADMIN
+    privileged: true
     volumes:
-      # 1) Orijinal index.html'inizi birebir sun
-      - ./index.html:/app/index.html:ro
-      # 2) hostapd config
-      - /etc/hostapd:/etc/hostapd:ro
+      - .:/app
