@@ -1,28 +1,24 @@
+# Dockerfile
+
 FROM python:3.11-slim
 
-# 1) Host ağındaki arayüzlerde değişiklik yapabilmek için network araçları ve hostapd kurulumu
-RUN apt-get update && apt-get install -y \
-    hostapd \
-    iproute2 \
-    iw \
-    net-tools \
-    iptables \
-    procps \
-  && rm -rf /var/lib/apt/lists/*
+# 1) Sistem paketleri: hostapd (AP), iproute2 (bridge), iptables (NAT), dhclient (DHCP)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      hostapd \
+      iproute2 \
+      iptables \
+      isc-dhcp-client && \
+    rm -rf /var/lib/apt/lists/*
 
+# 2) Uygulama klasörüne geç ve Python bağımlılıklarını kur
 WORKDIR /app
-
-# 2) Python bağımlılıkları (requirements.txt projenizde yer almalı)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3) Uygulama kodu ve entrypoint betiği
+# 3) Tüm proje dosyalarını kopyala ve entrypoint’e çalıştırma izni ver
 COPY . .
-
-# 4) entrypoint.sh çalıştırılabilir kıl
 RUN chmod +x entrypoint.sh
 
-# 5) Flask’in dinlediği port (host network modunda expose’a gerek yok ama dokümente için)
-EXPOSE 5000
-
+# 4) Container başladığında entrypoint.sh çalışsın
 ENTRYPOINT ["./entrypoint.sh"]
