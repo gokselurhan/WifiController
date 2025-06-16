@@ -21,16 +21,6 @@
       display: none;
       z-index: 1000;
     }
-    .qr-popup .close-btn {
-      position: absolute;
-      top: 4px;
-      right: 4px;
-      font-size: 1.2rem;
-      background: none;
-      border: none;
-      cursor: pointer;
-    }
-    .qr-popup .close-btn:hover { color: #e22; }
 
     /* Liste satırının relative olması, popup'ı konumlamak için */
     #ssidList li { position: relative; }
@@ -125,10 +115,8 @@
       fetchUplinkArayuzleri();
       fetchSsids();
 
-      document.getElementById('wifiInterface')
-              .addEventListener('change', onInterfaceChange);
-      document.getElementById('uplinkInterface')
-              .addEventListener('change', onInterfaceChange);
+      document.getElementById('wifiInterface').addEventListener('change', onInterfaceChange);
+      document.getElementById('uplinkInterface').addEventListener('change', onInterfaceChange);
     });
 
     function disableForm() {
@@ -143,8 +131,7 @@
       document.getElementById('vlanCustomGroup').style.display = chk.checked ? 'none' : 'flex';
     }
     function onInterfaceChange() {
-      const wifi   = document.getElementById('wifiInterface').value;
-      const uplink = document.getElementById('uplinkInterface').value;
+      const wifi = document.getElementById('wifiInterface').value;
       document.getElementById('interfaceWarning').textContent = '';
       if (wifi) enableForm(); else disableForm();
     }
@@ -166,9 +153,9 @@
         .then(data => {
           const sel = document.getElementById('uplinkInterface');
           sel.innerHTML = '<option disabled selected>Seçin…</option>';
-          data.interfaces.forEach(it => sel.append(
-            new Option(`${it.name} (${it.description})`, it.name)
-          ));
+          data.interfaces.forEach(it =>
+            sel.append(new Option(`${it.name} (${it.description})`, it.name))
+          );
         })
         .catch(console.error);
     }
@@ -187,7 +174,7 @@
       const ssidIn = document.getElementById('ssid').value.trim();
       const pwd    = document.getElementById('password').value.trim();
       const iface  = document.getElementById('wifiInterface').value;
-      let   vlan   = document.getElementById('noVlanCheckbox').checked
+      let vlan     = document.getElementById('noVlanCheckbox').checked
         ? 'Yok'
         : (() => {
             const v = document.getElementById('vlanSelect').value;
@@ -210,10 +197,16 @@
         alert(`"${ssidIn}" zaten kayıtlı!`);
         return;
       }
-      fetch('/api/ssids',{
+      fetch('/api/ssids', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ssid:ssidIn,password:pwd,vlan,enable:document.getElementById('enable').value,iface})
+        body:JSON.stringify({
+          ssid:ssidIn,
+          password:pwd,
+          vlan,
+          enable:document.getElementById('enable').value,
+          iface
+        })
       })
       .then(r => r.ok ? r.json() : r.json().then(e=>{throw new Error(e.error)}))
       .then(_ => {
@@ -222,7 +215,7 @@
             <strong>${ssidIn}</strong> eklendi. QR ile bağlanabilirsiniz.
             <div class="qrcode mt-2" id="tempQr"></div>
           </div>`;
-        new QRCode(document.getElementById('tempQr'),{
+        new QRCode(document.getElementById('tempQr'), {
           text:`WIFI:T:WPA;S:${ssidIn};P:${pwd};;`,
           width:180, height:180
         });
@@ -236,10 +229,9 @@
       const ul = document.getElementById('ssidList');
       ul.innerHTML = '';
       if (!ssidList.length) {
-        ul.innerHTML = `
-          <li class="list-group-item fst-italic text-muted">
-            Henüz tanımlı SSID yok
-          </li>`;
+        ul.innerHTML = `<li class="list-group-item fst-italic text-muted">
+          Henüz tanımlı SSID yok
+        </li>`;
         return;
       }
       ssidList.forEach((it, idx) => {
@@ -274,7 +266,7 @@
       if (it.vlan !== 'Yok') {
         document.getElementById('noVlanCheckbox').checked = false;
         toggleVlanDisable();
-        const sel = document.getElementById('vlanSelect');
+        const sel = document.getElementById__('vlanSelect');
         sel.value = sel.querySelector(`option[value="${it.vlan}"]`) ? it.vlan : 'custom';
         if (sel.value==='custom') {
           document.getElementById('vlanCustomGroup').style.display = 'flex';
@@ -319,11 +311,6 @@
       const li    = btn.closest('li'),
             popup = document.createElement('div');
       popup.className = 'qr-popup';
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'close-btn';
-      closeBtn.innerHTML = '×';
-      closeBtn.onclick = () => popup.remove();
-      popup.append(closeBtn);
       const qrC = document.createElement('div');
       popup.append(qrC);
       li.append(popup);
@@ -332,13 +319,23 @@
         width:180, height:180
       });
       const br = btn.getBoundingClientRect(), lr = li.getBoundingClientRect();
-      popup.style.top  = `${br.bottom - lr.top + 6}px`;
-      popup.style.left = `${br.left   - lr.left}px`;
+      popup.style.top     = `${br.bottom - lr.top + 6}px`;
+      popup.style.left    = `${br.left   - lr.left}px`;
       popup.style.display = 'block';
+
+      function outsideClickListener(e) {
+        if (!popup.contains(e.target) && !btn.contains(e.target)) {
+          closeAnyPopup();
+          document.removeEventListener('click', outsideClickListener);
+        }
+      }
+      setTimeout(() => {
+        document.addEventListener('click', outsideClickListener);
+      }, 0);
     }
 
     function closeAnyPopup() {
-      document.querySelectorAll('.qr-popup').forEach(x=>x.remove());
+      document.querySelectorAll('.qr-popup').forEach(x => x.remove());
     }
   </script>
 </body>
