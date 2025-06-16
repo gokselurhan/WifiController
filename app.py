@@ -1,11 +1,29 @@
 from flask import Flask, jsonify, request, send_from_directory
 import subprocess
 import os
+import re
 
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(__file__)
 SSID_FILE = "/etc/hostapd/hostapd.conf"
+
+# Donanımın desteklediği AP sayısını dinamik olarak al
+
+def get_ap_limit():
+    try:
+        res = subprocess.run("iw list", shell=True, capture_output=True, text=True)
+        for line in res.stdout.splitlines():
+            m = re.search(r"#\{\s*AP\s*\}\s*<=\s*(\d+)", line)
+            if m:
+                return int(m.group(1))
+    except:
+        pass
+    return 1
+
+@app.route('/api/aplimit')
+def ap_limit():
+    return jsonify({"max_ap": get_ap_limit()})
 
 @app.route('/')
 def index():
@@ -50,7 +68,6 @@ def manage_ssids():
                 line = raw.strip()
                 if not line:
                     if current:
-                        # finalize block
                         current.setdefault('vlan','Yok')
                         current.setdefault('enable','1')
                         ssids.append(current)
@@ -67,7 +84,6 @@ def manage_ssids():
                     current['ssid'] = line.split('=',1)[1]
                 elif line.startswith('wpa_passphrase='):
                     current['password'] = line.split('=',1)[1]
-        # append last block
         if current:
             current.setdefault('vlan','Yok')
             current.setdefault('enable','1')
@@ -79,7 +95,9 @@ def manage_ssids():
     pwd = data.get('password','')
     if not (8 <= len(pwd) <= 63):
         return jsonify({"error":"Parola 8–63 karakter olmalı."}),400
-    # write new block
+    # check limit via API
+    if len([s for s in manage_ssids().get_json()['ssids']]) >= get_ap_limit():
+        return jsonify({"error": f"Bu kart en fazla {get_ap_limit()} SSID yayınını destekliyor."}),400
     try:
         with open(SSID_FILE, 'a') as f:
             f.write("\n# Eklenen SSID\n")
@@ -95,14 +113,12 @@ def manage_ssids():
     except Exception as e:
         return jsonify({"error":f"Dosyaya yazılamadı: {e}"}),500
 
-    # restart hostapd
     subprocess.run(["pkill","hostapd"], check=False)
     subprocess.run(["hostapd","-B",SSID_FILE], check=False)
     return jsonify({"message":"Yeni SSID eklendi ve yayın güncellendi."}),201
 
 @app.route('/api/ssids/<int:index>', methods=['DELETE'])
 def delete_ssid(index):
-    # parse blocks, remove index-th, rewrite full config
     if not os.path.exists(SSID_FILE):
         return jsonify({"message":"Konfig bulunamadı."}),404
     blocks = []
@@ -117,9 +133,7 @@ def delete_ssid(index):
             blocks.append(current)
     if index < 0 or index >= len(blocks):
         return jsonify({"error":"Geçersiz index."}),400
-    # remove block
     blocks.pop(index)
-    # write back
     try:
         with open(SSID_FILE, 'w') as f:
             for blk in blocks:
@@ -128,7 +142,6 @@ def delete_ssid(index):
                 f.write("\n")
     except Exception as e:
         return jsonify({"error":f"Dosyaya yazılamadı: {e}"}),500
-    # restart hostapd
     subprocess.run(["pkill","hostapd"], check=False)
     subprocess.run(["hostapd","-B",SSID_FILE], check=False)
     return jsonify({"message":"SSID silindi ve yayın güncellendi."}),200
