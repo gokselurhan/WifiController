@@ -4,8 +4,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    network_mode: host
-    privileged: true
+    # artık host network’e girmiyoruz, kendi bridge’inde kalacak:
+    # network_mode: host  
+    ports:
+      - "5000:5000"
+    privileged: true     # network komutlarına izinlere ihtiyaç var ama host’u *iptal* etmez
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -14,5 +17,6 @@ services:
       - UPLINK=ens192
       - WIFI_IFACE=wls160
       - BRIDGE=br0
+      - START_NETWORK=no   # <-- Varsayılan: ağ setup’u çalışmaz
     volumes:
       - /etc/hostapd:/etc/hostapd:ro
