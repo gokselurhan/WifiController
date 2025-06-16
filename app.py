@@ -7,30 +7,8 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(__file__)
 SSID_FILE = "/etc/hostapd/hostapd.conf"
 
-def check_ap_limit():
-    """Geçici olarak hep True döndür: çoklu AP destekleniyormuş gibi davran."""
-    return True
-    # -------------------
-    # Orijinal kod buraya gelecekti, ama geçici devre dışı:
-    # try:
-    #     result = subprocess.run(
-    #         "iw list", shell=True, capture_output=True, text=True
-    #     )
-    #     lines = result.stdout.splitlines()
-    #     combo_section = False
-    #     for line in lines:
-    #         if "valid interface combinations" in line:
-    #             combo_section = True
-    #         elif combo_section and "AP" in line:
-    #             compact = line.replace(" ", "")
-    #             return not ("AP}<=1" in compact)
-    #     return True
-    # except:
-    #     return True
-
 @app.route('/')
 def index():
-    # artık kesinlikle app.py'nın olduğu dizinden alacak
     return send_from_directory(BASE_DIR, 'index.html')
 
 @app.route('/api/interfaces')
@@ -62,49 +40,98 @@ def eth_interfaces():
 @app.route('/api/ssids', methods=['GET','POST'])
 def manage_ssids():
     if request.method == 'GET':
+        # Multi-block parse
         if not os.path.exists(SSID_FILE):
             return jsonify({"ssids": []})
+        ssids = []
+        current = {}
         with open(SSID_FILE) as f:
-            lines = f.readlines()
-        ssid = pwd = iface = ""
-        enable = "1"
-        for line in lines:
-            if line.startswith("interface="):
-                iface = line.strip().split("=",1)[1]
-            elif line.startswith("ssid="):
-                ssid = line.strip().split("=",1)[1]
-            elif line.startswith("wpa_passphrase="):
-                pwd = line.strip().split("=",1)[1]
-        return jsonify({"ssids":[{"ssid":ssid,"password":pwd,"iface":iface,"vlan":"Yok","enable":enable}]})
+            for raw in f:
+                line = raw.strip()
+                if not line:
+                    if current:
+                        # finalize block
+                        current.setdefault('vlan','Yok')
+                        current.setdefault('enable','1')
+                        ssids.append(current)
+                        current = {}
+                    continue
+                if line.startswith('interface='):
+                    if current:
+                        current.setdefault('vlan','Yok')
+                        current.setdefault('enable','1')
+                        ssids.append(current)
+                        current = {}
+                    current['iface'] = line.split('=',1)[1]
+                elif line.startswith('ssid='):
+                    current['ssid'] = line.split('=',1)[1]
+                elif line.startswith('wpa_passphrase='):
+                    current['password'] = line.split('=',1)[1]
+        # append last block
+        if current:
+            current.setdefault('vlan','Yok')
+            current.setdefault('enable','1')
+            ssids.append(current)
+        return jsonify({"ssids": ssids})
 
+    # POST: append mode
     data = request.get_json(force=True)
     pwd = data.get('password','')
     if not (8 <= len(pwd) <= 63):
         return jsonify({"error":"Parola 8–63 karakter olmalı."}),400
-    if not check_ap_limit() and os.path.exists(SSID_FILE):
-        return jsonify({"error":"Bu cihaz yalnızca tek SSID yayınına izin veriyor."}),400
+    # write new block
+    try:
+        with open(SSID_FILE, 'a') as f:
+            f.write("\n# Eklenen SSID\n")
+            f.write(f"interface={data['iface']}\n")
+            f.write("driver=nl80211\n")
+            f.write(f"ssid={data['ssid']}\n")
+            f.write("hw_mode=g\n")
+            f.write("channel=6\n")
+            f.write(f"wpa_passphrase={pwd}\n")
+            f.write("wpa=2\n")
+            f.write("wpa_key_mgmt=WPA-PSK\n")
+            f.write("rsn_pairwise=CCMP\n")
+    except Exception as e:
+        return jsonify({"error":f"Dosyaya yazılamadı: {e}"}),500
 
-    with open(SSID_FILE,'w') as f:
-        f.write(f"interface={data['iface']}\n")
-        f.write("driver=nl80211\n")
-        f.write(f"ssid={data['ssid']}\n")
-        f.write("hw_mode=g\n")
-        f.write("channel=6\n")
-        f.write(f"wpa_passphrase={pwd}\n")
-        f.write("wpa=2\n")
-        f.write("wpa_key_mgmt=WPA-PSK\n")
-        f.write("rsn_pairwise=CCMP\n")
-
+    # restart hostapd
     subprocess.run(["pkill","hostapd"], check=False)
     subprocess.run(["hostapd","-B",SSID_FILE], check=False)
-    return jsonify({"message":"SSID kaydedildi ve yayın başladı"}),201
+    return jsonify({"message":"Yeni SSID eklendi ve yayın güncellendi."}),201
 
 @app.route('/api/ssids/<int:index>', methods=['DELETE'])
 def delete_ssid(index):
-    if os.path.exists(SSID_FILE):
-        os.remove(SSID_FILE)
+    # parse blocks, remove index-th, rewrite full config
+    if not os.path.exists(SSID_FILE):
+        return jsonify({"message":"Konfig bulunamadı."}),404
+    blocks = []
+    current = []
+    with open(SSID_FILE) as f:
+        for line in f:
+            if line.strip().startswith('interface=') and current:
+                blocks.append(current)
+                current = []
+            current.append(line)
+        if current:
+            blocks.append(current)
+    if index < 0 or index >= len(blocks):
+        return jsonify({"error":"Geçersiz index."}),400
+    # remove block
+    blocks.pop(index)
+    # write back
+    try:
+        with open(SSID_FILE, 'w') as f:
+            for blk in blocks:
+                for l in blk:
+                    f.write(l)
+                f.write("\n")
+    except Exception as e:
+        return jsonify({"error":f"Dosyaya yazılamadı: {e}"}),500
+    # restart hostapd
     subprocess.run(["pkill","hostapd"], check=False)
-    return jsonify({"message":"SSID silindi ve yayını durdurdu"}),200
+    subprocess.run(["hostapd","-B",SSID_FILE], check=False)
+    return jsonify({"message":"SSID silindi ve yayın güncellendi."}),200
 
 if __name__=='__main__':
     app.run(host="0.0.0.0", port=5000)
