@@ -8,6 +8,7 @@
   <style>
     body { background: #f8f9fa; padding: 40px; }
     .card { margin-bottom: 30px; }
+    .qrcode { margin-top: 10px; }
 
     /* QR-Göster popup kutusu */
     .qr-popup {
@@ -19,7 +20,7 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       z-index: 1000;
       display: inline-block;
-      width: auto;
+      visibility: hidden;
     }
     .qr-popup .close-btn {
       position: absolute;
@@ -27,10 +28,11 @@
       right: 4px;
       font-size: 1.2rem;
       color: #888;
-      background: transparent;
+      background: none;
       border: none;
       cursor: pointer;
-      z-index: 1001;
+      line-height: 1;
+      transition: color 0.2s;
     }
     .qr-popup .close-btn:hover { color: #e22; }
 
@@ -53,7 +55,7 @@
       <div class="card-header">Wi-Fi Kartı Seç</div>
       <div class="card-body">
         <select id="wifiInterface" class="form-select">
-          <option value="" disabled selected>Seçin…</option>
+          <option value="" disabled selected>Yükleniyor…</option>
         </select>
         <div id="interfaceWarning" class="text-danger mt-2"></div>
       </div>
@@ -63,8 +65,12 @@
     <div class="card mb-4">
       <div class="card-header">Ethernet Uplink Arayüzü</div>
       <div class="card-body">
-        <select id="uplinkInterface" class="form-select">
-          <option value="" disabled selected>Seçin…</option>
+        <p>
+          Aşağıda sistemdeki tüm ağ arayüzleri listelenmiştir.<br>
+          Wi-Fi trafiğinin çıkış (uplink) yapacağı arayüzü seçin.
+        </p>
+        <select id="uplinkInterface" class="form-select mb-2">
+          <option value="" disabled selected>Yükleniyor…</option>
         </select>
       </div>
     </div>
@@ -104,16 +110,19 @@
               <label class="form-check-label" for="noVlanCheckbox">VLAN yok</label>
             </div>
             <select id="vlanSelect" class="form-select" disabled>
-              <option value="Yok" selected>Yok</option>
+              <option value="Yok">Yok</option>
               <option value="custom">Özel VLAN</option>
             </select>
             <div id="vlanCustomGroup" class="d-flex mt-2" style="display:none; gap:8px;">
               <input type="text" id="vlanCustomId" class="form-control" placeholder="VLAN ID">
               <input type="text" id="vlanCustomDesc" class="form-control" placeholder="Açıklama">
             </div>
-          </fieldset>
-        <button id="applyBtn" class="btn btn-success" onclick="handleAddSsid()">Ayarları Uygula</button>
-        <button id="cancelBtn" class="btn btn-secondary ms-2" onclick="cancelEdit()" style="display:none">İptal</button>
+          </div>
+          <button id="applyBtn" class="btn btn-success" onclick="handleAddSsid()">Ayarları Uygula</button>
+          <button id="cancelBtn" class="btn btn-secondary ms-2" onclick="cancelEdit()" style="display:none">İptal</button>
+        </fieldset>
+
+        <!-- Ekleme sonrası geçici mesaj + QR kod -->
         <div id="newWifiMessage" class="mt-3"></div>
       </div>
     </div>
@@ -121,65 +130,78 @@
 
   <script>
     let ssidList = [], isEditing = false, editingIndex = null;
+
     document.addEventListener('DOMContentLoaded', () => {
-      disableForm(); fetchWifiArayuzleri(); fetchUplinkArayuzleri(); fetchSsids();
+      disableForm();
+      fetchWifiArayuzleri();
+      fetchUplinkArayuzleri();
+      fetchSsids();
+
       document.getElementById('wifiInterface').addEventListener('change', onInterfaceChange);
       document.getElementById('uplinkInterface').addEventListener('change', onInterfaceChange);
     });
 
     function disableForm() { document.getElementById('newSsidFieldset').disabled = true; }
     function enableForm()  { document.getElementById('newSsidFieldset').disabled = false; }
+
     function toggleVlanDisable() {
       const noVlan = document.getElementById('noVlanCheckbox').checked;
       document.getElementById('vlanSelect').disabled = noVlan;
       document.getElementById('vlanCustomGroup').style.display = noVlan ? 'none' : 'flex';
     }
+
     function onInterfaceChange() {
       const wifi = document.getElementById('wifiInterface').value;
       const uplink = document.getElementById('uplinkInterface').value;
       const warning = document.getElementById('interfaceWarning');
-      if (wifi) { enableForm(); warning.textContent = uplink ? '' : 'Uplink seçilmedi.'; }
-      else     { disableForm(); warning.textContent = ''; }
+
+      if (wifi) {
+        enableForm();
+        warning.textContent = uplink ? '' : 'Uplink arayüzü seçilmedi, dışarı çıkış olmayabilir.';
+      } else {
+        disableForm();
+        warning.textContent = '';
+      }
     }
 
-    function fetchWifiArayuzleri() {
-      fetch('/api/interfaces').then(r=>r.json()).then(data=>{
-        const sel=document.getElementById('wifiInterface'); sel.innerHTML='<option disabled selected>Seçin…</option>';
-        data.interfaces.forEach(i=>sel.append(new Option(i,i)));
-      }).catch(console.error);
+    function fetchWifiArialaruzleri() {
+      fetch('/api/interfaces')
+        .then(r => r.json())
+        .then(data => {
+          const sel = document.getElementById('wifiInterface');
+          sel.innerHTML = '<option disabled selected>Seçin…</option>';
+          data.interfaces.forEach(i => sel.append(new Option(i, i)));
+        })
+        .catch(e => console.error(e));
     }
+
     function fetchUplinkArayuzleri() {
-      fetch('/api/ethinterfaces').then(r=>r.json()).then(data=>{
-        const sel=document.getElementById('uplinkInterface'); sel.innerHTML='<option disabled selected>Seçin…</option>';
-        data.interfaces.forEach(it=>sel.append(new Option(`${it.name} (${it.description})`, it.name)));
-      }).catch(e=>{ console.error(e); document.getElementById('uplinkInterface').innerHTML='<option disabled>Yüklenemedi</option>'; });
+      fetch('/api/ethinterfaces')
+        .then(r => r.json())
+        .then(data => {
+          const sel = document.getElementById('uplinkInterface');
+          sel.innerHTML = '<option disabled selected>Seçin…</option>';
+          data.interfaces.forEach(item => {
+            const txt = `${item.name} (${item.description})`;
+            sel.append(new Option(txt, item.name));
+          });
+        })
+        .catch(e => {
+          console.error(e);
+          document.getElementById('uplinkInterface').innerHTML = '<option disabled>Yüklenemedi</option>';
+        });
     }
+
     function fetchSsids() {
-      fetch('/api/ssids').then(r=>r.json()).then(data=>{ ssidList=data.ssids; renderList(); }).catch(console.error);
+      fetch('/api/ssids')
+        .then(r => r.json())
+        .then(data => {
+          ssidList = data.ssids;
+          renderList();
+        })
+        .catch(e => console.error(e));
     }
 
     function handleAddSsid() {
-      const ssidIn=document.getElementById('ssid').value.trim();
-      const pwd=document.getElementById('password').value.trim();
-      const iface=document.getElementById('wifiInterface').value;
-      let vlan=document.getElementById('noVlanCheckbox').checked?'Yok':(() =>{
-        const v=document.getElementById('vlanSelect').value;
-        if(v==='custom'){
-          const i=document.getElementById('vlanCustomId').value.trim();
-          const d=document.getElementById('vlanCustomDesc').value.trim();
-          if(!i||!d){alert('Özel VLAN boş!');return null;} return `${i} - ${d}`;
-        }
-        return v;
-      })(); if(vlan===null)return;
-      if(!ssidIn||!pwd||!iface){alert('SSID, parola, kart gerekli!');return;}
-      if(ssidList.some((x,i)=>(x.ssid.toLowerCase()===ssidIn.toLowerCase())&&!(isEditing&&i===editingIndex))){alert(`${ssidIn} zaten var!`);return;}
-      fetch('/api/ssids',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid:ssidIn,password:pwd,vlan,enable:document.getElementById('enable').value,iface})})
-        .then(r=>r.ok?r.json():r.json().then(e=>{throw new Error(e.error)}))
-        .then(_=>{
-          document.getElementById('newWifiMessage').innerHTML=`<div class="alert alert-light border-secondary p-2"><strong>${ssidIn}</strong> eklendi.<div class="qrcode mt-2" id="tempQr"></div></div>`;
-          new QRCode(document.getElementById('tempQr'),{text:`WIFI:T:WPA;S:${ssidIn};P:${pwd};;`,width:180,height:180});
-          isEditing=false; fetchSsids();
-        }).catch(e=>alert('Hata: '+e.message));
-    }
-
-    function renderList(){const ul=document.getElementById('ssidList');ul.innerHTML='';if(!ssidList.length){ul.innerHTML='<li class="list-group-item fst-italic text-muted">SS
+      const ssidIn = document.getElementById('ssid').value.trim();
+      const pwd    = document.getElementById('password').value.trim();
