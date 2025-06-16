@@ -1,123 +1,56 @@
-from flask import Flask, jsonify, request, send_from_directory
-import subprocess
-import os
+from flask import Flask, render_template, request, jsonify
+import subprocess, os, signal
 
 app = Flask(__name__)
 
-SSID_FILE = "/etc/hostapd/hostapd.conf"
-
-def check_ap_limit():
-    """Cihazın aynı anda yalnızca 1 SSID yayınına izin verip vermediğini kontrol eder."""
-    try:
-        result = subprocess.run(
-            "iw list", shell=True, capture_output=True, text=True
-        )
-        lines = result.stdout.splitlines()
-        combo_section = False
-        for line in lines:
-            if "valid interface combinations" in line:
-                combo_section = True
-            elif combo_section and "AP" in line:
-                compact = line.replace(" ", "")
-                return not ("AP}<=1" in compact)
-        return True
-    except:
-        return True
-
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return render_template('index.html')
 
-@app.route('/api/interfaces')
-def interfaces():
-    """Sistemdeki Wi-Fi arayüzlerini döner."""
-    result = subprocess.run(
-        "iw dev | awk '$1==\"Interface\"{print $2}'",
-        shell=True, capture_output=True, text=True
-    )
-    interfaces = [l for l in result.stdout.splitlines() if l.strip()]
-    return jsonify({"interfaces": interfaces})
+@app.route('/api/dhcp_servers')
+def dhcp_servers():
+    servers = []
+    try:
+        # Ağdaki DHCP sunucularını tarar
+        res = subprocess.run(
+            ['nmap', '--script', 'broadcast-dhcp-discover', '-sU', '-p', '67'],
+            capture_output=True, text=True, timeout=30
+        )
+        for line in res.stdout.splitlines():
+            if 'Server Identifier:' in line:
+                ip = line.split('Server Identifier:')[-1].strip()
+                servers.append(ip)
+    except Exception as e:
+        print('DHCP scan hatası:', e)
 
-@app.route('/api/ethinterfaces')
-def eth_interfaces():
-    """Tüm /sys/class/net arayüzlerini (lo dahil) name+description formatında döner."""
-    all_ifaces = sorted(os.listdir('/sys/class/net'))
-    def describe(iface):
-        if iface == 'lo': return 'Döngü arayüzü (loopback)'
-        if iface.startswith(('wl','wlan','wlp')): return 'Kablosuz (Wi-Fi)'
-        if iface.startswith(('eth','enp','ens','eno','enx')): return 'Fiziksel Ethernet'
-        if iface == 'docker0': return 'Docker köprü ağı'
-        if iface.startswith('br-'): return 'Bridge (köprü)'
-        if iface.startswith('veth'): return 'Sanal Ethernet (container)'
-        if iface.startswith('tun'): return 'TUN/TAP VPN'
-        if iface.startswith('wg'): return 'WireGuard VPN'
-        if iface.startswith('virbr'): return 'Libvirt bridge'
-        return 'Bilinmeyen arayüz'
-    uplinks = [{"name": i, "description": describe(i)} for i in all_ifaces]
-    return jsonify({"interfaces": uplinks})
+    # Ortam değişkenindeki override’ı en başa koy
+    default = os.environ.get('DHCP_SERVER') or os.environ.get('DEFAULT_SERVER')
+    if default and default not in servers:
+        servers.insert(0, default)
+    return jsonify(servers=servers)
 
-@app.route('/api/ssids', methods=['GET', 'POST'])
-def manage_ssids():
-    """
-    GET  -> Mevcut hostapd.conf’u parse edip JSON liste döner.
-    POST -> Yeni SSID verisini hostapd.conf'a yazar, ve hostapd’yi yeniden başlatır.
-    """
-    if request.method == 'GET':
-        if not os.path.exists(SSID_FILE):
-            return jsonify({"ssids": []})
-        with open(SSID_FILE) as f:
-            lines = f.readlines()
-        ssid = pwd = iface = ""
-        enable = "1"
-        for line in lines:
-            if line.startswith("interface="):
-                iface = line.strip().split("=",1)[1]
-            elif line.startswith("ssid="):
-                ssid = line.strip().split("=",1)[1]
-            elif line.startswith("wpa_passphrase="):
-                pwd = line.strip().split("=",1)[1]
-        return jsonify({"ssids": [{
-            "ssid": ssid,
-            "password": pwd,
-            "iface": iface,
-            "vlan": "Yok",
-            "enable": enable
-        }]})
+@app.route('/api/set_dhcp_server', methods=['POST'])
+def set_dhcp_server():
+    data = request.get_json()
+    server = data.get('server')
+    if not server:
+        return jsonify(success=False, error='Sunucu IP belirtilmedi'), 400
 
-    # POST ile ekleme/güncelleme
-    data = request.get_json(force=True)
-    pwd = data.get('password','')
-    if not (8 <= len(pwd) <= 63):
-        return jsonify({"error":"Parola 8–63 karakter olmalı."}), 400
-    if not check_ap_limit() and os.path.exists(SSID_FILE):
-        return jsonify({"error":"Bu cihaz yalnızca tek SSID yayınına izin veriyor."}), 400
+    wifi_iface = os.environ.get('WIFI_IFACE', 'wls160')
+    bridge = os.environ.get('BRIDGE', 'br0')
 
-    # hostapd.conf’u yaz
-    with open(SSID_FILE, 'w') as f:
-        f.write(f"interface={data['iface']}\n")
-        f.write("driver=nl80211\n")
-        f.write(f"ssid={data['ssid']}\n")
-        f.write("hw_mode=g\n")
-        f.write("channel=6\n")
-        f.write(f"wpa_passphrase={pwd}\n")
-        f.write("wpa=2\n")
-        f.write("wpa_key_mgmt=WPA-PSK\n")
-        f.write("rsn_pairwise=CCMP\n")
+    # Mevcut relay’i durdur
+    subprocess.run(['pkill', 'dhcrelay'], stderr=subprocess.DEVNULL)
 
-    # ─────────── YAYINI BAŞLAT ───────────
-    subprocess.run(["pkill", "hostapd"], check=False)
-    subprocess.run(["hostapd", "-B", SSID_FILE], check=False)
-    # ──────────────────────────────────────
+    # Yeni relay başlat
+    try:
+        subprocess.Popen(['dhcrelay', '-i', wifi_iface, '-i', bridge, server])
+        os.environ['DHCP_SERVER'] = server
+        return jsonify(success=True)
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
 
-    return jsonify({"message":"SSID kaydedildi ve yayın başladı"}), 201
-
-@app.route('/api/ssids/<int:index>', methods=['DELETE'])
-def delete_ssid(index):
-    """hostapd.conf’u siler ve yayını durdurur."""
-    if os.path.exists(SSID_FILE):
-        os.remove(SSID_FILE)
-    subprocess.run(["pkill","hostapd"], check=False)
-    return jsonify({"message":"SSID silindi ve yayını durdurdu"}), 200
+# (Mevcut hotspot kontrol route'larınız buraya gelir...)
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host='0.0.0.0', port=5000)
