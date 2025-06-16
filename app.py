@@ -8,22 +8,20 @@ SSID_FILE = "/etc/hostapd/hostapd.conf"
 
 def check_ap_limit():
     """Cihazın aynı anda yalnızca 1 SSID yayınına izin verip vermediğini kontrol eder."""
-    try:
-  # GEÇİCİ BYPASS: her zaman True dön
-    return True
-        result = subprocess.run(
-            "iw list", shell=True, capture_output=True, text=True
-        )
-        lines = result.stdout.splitlines()
-        combo_section = False
-        for line in lines:
-            if "valid interface combinations" in line:
-                combo_section = True
-            elif combo_section and "AP" in line:
-                compact = line.replace(" ", "")
-                return not ("AP}<=1" in compact)
-        return True
-    except:
+    #try:
+     #   result = subprocess.run(
+      #      "iw list", shell=True, capture_output=True, text=True
+       # )
+        #lines = result.stdout.splitlines()
+        #combo_section = False
+        #for line in lines:
+         #   if "valid interface combinations" in line:
+          #      combo_section = True
+          #  elif combo_section and "AP" in line:
+           #     compact = line.replace(" ", "")
+            #    return not ("AP}<=1" in compact)
+        #return True
+    #except:
         return True
 
 @app.route('/')
