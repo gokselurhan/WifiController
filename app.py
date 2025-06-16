@@ -4,114 +4,121 @@ import os
 
 app = Flask(__name__)
 
-SSID_DOSYA = "/etc/hostapd/hostapd.conf"
+SSID_FILE = "/etc/hostapd/hostapd.conf"
 
-def sinirli_ap_destegi_var_mi():
-    """
-    Cihazın birden fazla access point desteğini kontrol eder.
-    Eğer "{ AP } <= 1" kısıtlaması varsa sadece 1 AP desteklenir.
-    """
+def check_ap_limit():
+    """Cihazın aynı anda yalnızca 1 SSID yayınına izin verip vermediğini kontrol eder."""
     try:
         result = subprocess.run(
             "iw list", shell=True, capture_output=True, text=True
         )
         lines = result.stdout.splitlines()
-        bul = False
-        for satir in lines:
-            if "valid interface combinations" in satir:
-                bul = True
-            elif bul and "AP" in satir:
-                komp = satir.replace(" ", "")
-                return not ("AP}<=1" in komp)
+        combo_section = False
+        for line in lines:
+            if "valid interface combinations" in line:
+                combo_section = True
+            elif combo_section and "AP" in line:
+                compact = line.replace(" ", "")
+                return not ("AP}<=1" in compact)
         return True
     except:
         return True
 
 @app.route('/')
 def index():
-    # index.html dosyasını sunar
     return send_from_directory('.', 'index.html')
 
 @app.route('/api/interfaces')
-def wifi_arayuzleri():
+def interfaces():
     """Sistemdeki Wi-Fi arayüzlerini döner."""
-    try:
-        result = subprocess.run(
-            "iw dev | awk '$1==\"Interface\"{print $2}'",
-            shell=True, capture_output=True, text=True
-        )
-        arayuzler = [l for l in result.stdout.splitlines() if l.strip()]
-    except:
-        arayuzler = []
-    return jsonify({"interfaces": arayuzler})
+    result = subprocess.run(
+        "iw dev | awk '$1==\"Interface\"{print $2}'",
+        shell=True, capture_output=True, text=True
+    )
+    interfaces = [l for l in result.stdout.splitlines() if l.strip()]
+    return jsonify({"interfaces": interfaces})
 
 @app.route('/api/ethinterfaces')
-def tum_ag_arayuzleri():
-    """
-    /sys/class/net altındaki tüm ağ arayüzlerini (lo dahil)
-    isim ve açıklama ile döner.
-    """
-    try:
-        tum = sorted(os.listdir('/sys/class/net'))
-    except Exception as e:
-        print("Arayüz listeleme hatası:", e)
-        tum = []
-
-    def aciklama(iface: str) -> str:
-        if iface == 'lo':
-            return 'Döngü arayüzü (loopback)'
-        if iface.startswith(('wl','wlan','wlp')):
-            return 'Kablosuz (Wi-Fi) arayüz'
-        if iface.startswith(('eth','enp','ens','eno','enx')):
-            return 'Fiziksel Ethernet arayüzü'
-        if iface == 'docker0':
-            return 'Docker köprü ağı'
-        if iface.startswith('br-'):
-            return 'Köprü (bridge) arayüz'
-        if iface.startswith('veth'):
-            return 'Sanal Ethernet (container bağlantısı)'
-        if iface.startswith('tun'):
-            return 'TUN/TAP VPN arayüzü'
-        if iface.startswith('wg'):
-            return 'WireGuard VPN arayüzü'
-        if iface.startswith('virbr'):
-            return 'Libvirt köprü arayüzü'
+def eth_interfaces():
+    """Tüm /sys/class/net arayüzlerini (lo dahil) name+description formatında döner."""
+    all_ifaces = sorted(os.listdir('/sys/class/net'))
+    def describe(iface):
+        if iface == 'lo': return 'Döngü arayüzü (loopback)'
+        if iface.startswith(('wl','wlan','wlp')): return 'Kablosuz (Wi-Fi)'
+        if iface.startswith(('eth','enp','ens','eno','enx')): return 'Fiziksel Ethernet'
+        if iface == 'docker0': return 'Docker köprü ağı'
+        if iface.startswith('br-'): return 'Bridge (köprü)'
+        if iface.startswith('veth'): return 'Sanal Ethernet (container)'
+        if iface.startswith('tun'): return 'TUN/TAP VPN'
+        if iface.startswith('wg'): return 'WireGuard VPN'
+        if iface.startswith('virbr'): return 'Libvirt bridge'
         return 'Bilinmeyen arayüz'
-
-    uplink_arayuzleri = [
-        {"name": i, "description": aciklama(i)}
-        for i in tum
-    ]
-    return jsonify({"interfaces": uplink_arayuzleri})
+    uplinks = [{"name": i, "description": describe(i)} for i in all_ifaces]
+    return jsonify({"interfaces": uplinks})
 
 @app.route('/api/ssids', methods=['GET', 'POST'])
-def ssid_yonetimi():
+def manage_ssids():
     """
-    GET  -> Mevcut SSID konfigürasyonlarını döner.
-    POST -> Yeni SSID ekler veya var olanı günceller.
+    GET  -> Mevcut hostapd.conf’u parse edip JSON liste döner.
+    POST -> Yeni SSID verisini hostapd.conf'a yazar, ve hostapd’yi yeniden başlatır.
     """
     if request.method == 'GET':
-        if not os.path.exists(SSID_DOSYA):
+        if not os.path.exists(SSID_FILE):
             return jsonify({"ssids": []})
-        with open(SSID_DOSYA) as f:
-            satirlar = f.readlines()
-        # TODO: hostapd.conf içeriğini parse edip gerçek SSID listesini döndürün
-        return jsonify({"ssids": []})
-    else:
-        # TODO: request.json içinden ssid, password, vlan bilgilerini alıp kaydedin
-        return jsonify({"message": "SSID eklendi/güncellendi"}), 201
+        with open(SSID_FILE) as f:
+            lines = f.readlines()
+        ssid = pwd = iface = ""
+        enable = "1"
+        for line in lines:
+            if line.startswith("interface="):
+                iface = line.strip().split("=",1)[1]
+            elif line.startswith("ssid="):
+                ssid = line.strip().split("=",1)[1]
+            elif line.startswith("wpa_passphrase="):
+                pwd = line.strip().split("=",1)[1]
+        return jsonify({"ssids": [{
+            "ssid": ssid,
+            "password": pwd,
+            "iface": iface,
+            "vlan": "Yok",
+            "enable": enable
+        }]})
+
+    # POST ile ekleme/güncelleme
+    data = request.get_json(force=True)
+    pwd = data.get('password','')
+    if not (8 <= len(pwd) <= 63):
+        return jsonify({"error":"Parola 8–63 karakter olmalı."}), 400
+    if not check_ap_limit() and os.path.exists(SSID_FILE):
+        return jsonify({"error":"Bu cihaz yalnızca tek SSID yayınına izin veriyor."}), 400
+
+    # hostapd.conf’u yaz
+    with open(SSID_FILE, 'w') as f:
+        f.write(f"interface={data['iface']}\n")
+        f.write("driver=nl80211\n")
+        f.write(f"ssid={data['ssid']}\n")
+        f.write("hw_mode=g\n")
+        f.write("channel=6\n")
+        f.write(f"wpa_passphrase={pwd}\n")
+        f.write("wpa=2\n")
+        f.write("wpa_key_mgmt=WPA-PSK\n")
+        f.write("rsn_pairwise=CCMP\n")
+
+    # ─────────── YAYINI BAŞLAT ───────────
+    # Çalışan hostapd'yi durdur ve yeni konfig ile yeniden başlat
+    subprocess.run(["pkill", "hostapd"], check=False)
+    subprocess.run(["hostapd", "-B", SSID_FILE], check=False)
+    # ──────────────────────────────────────
+
+    return jsonify({"message":"SSID kaydedildi ve yayın başladı"}), 201
 
 @app.route('/api/ssids/<int:index>', methods=['DELETE'])
-def ssid_sil(index):
-    """
-    Belirtilen indeksteki SSID’i siler.
-    (Örnek olarak tüm hostapd.conf’u siliyor, ihtiyaca göre değiştirin.)
-    """
-    if os.path.exists(SSID_DOSYA):
-        os.remove(SSID_DOSYA)
-    subprocess.run(["pkill", "hostapd"], check=False)
-    return jsonify({"message": "SSID silindi"}), 200
+def delete_ssid(index):
+    """hostapd.conf’u siler ve yayını durdurur."""
+    if os.path.exists(SSID_FILE):
+        os.remove(SSID_FILE)
+    subprocess.run(["pkill","hostapd"], check=False)
+    return jsonify({"message":"SSID silindi ve yayını durdurdu"}), 200
 
 if __name__ == '__main__':
-    # Host ağında 0.0.0.0 üzerinden dinle
     app.run(host="0.0.0.0", port=5000)
