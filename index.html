@@ -1,61 +1,169 @@
-  <!-- …var olan SSID / kanal / WPA ayarları… -->
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>WiFi Kontrol Paneli</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+  <style>
+    body { background: #f8f9fa; padding: 40px; }
+    .card { margin-bottom: 30px; }
+    .qrcode { margin-top: 10px; }
+    .qr-popup {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 1000;
+      visibility: hidden;
+    }
+    .qr-popup .close-btn {
+      position: absolute; top: 8px; right: 8px;
+      background: none; border: none; font-size: 1.2rem; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 class="mb-4">WiFi Kontrol Paneli</h2>
 
-  <div class="form-group">
-    <label for="dhcpServerSelect">DHCP Sunucusu Seçin</label>
-    <select id="dhcpServerSelect" class="form-control">
-      <option value="">– Seçiniz –</option>
-    </select>
-    <small class="form-text text-muted">
-      Listedeki sunuculardan biri yoksa aşağıya elle girin.
-    </small>
-    <input type="text" id="dhcpServerInput" class="form-control mt-1"
-           placeholder="DHCP Sunucusu IP">
+    <!-- Wi-Fi Kartı Seçimi -->
+    <div class="card mb-4">
+      <div class="card-header">Wi-Fi Kartı Seç</div>
+      <div class="card-body">
+        <select id="wifiInterface" class="form-select">
+          <option value="" disabled selected>Yükleniyor…</option>
+        </select>
+        <div id="interfaceWarning" class="text-danger mt-2"></div>
+      </div>
+    </div>
+
+    <!-- Ethernet Uplink Arayüzü Seçimi -->
+    <div class="card mb-4">
+      <div class="card-header">Ethernet Uplink Arayüzü</div>
+      <div class="card-body">
+        <p>
+          Aşağıda sistemdeki tüm ağ arayüzleri listelenmiştir.<br>
+          Wi-Fi trafiğinin çıkış (uplink) yapacağı arayüzü seçin.
+        </p>
+        <select id="uplinkInterface" class="form-select">
+          <option value="" disabled selected>Yükleniyor…</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Tanımlı SSID'ler -->
+    <div class="card mb-4">
+      <div class="card-header">Tanımlı SSID'ler</div>
+      <div class="card-body">
+        <ul class="list-group" id="ssidList"></ul>
+      </div>
+    </div>
+
+    <!-- Yeni / Düzenle SSID Formu -->
+    <div class="card mb-4">
+      <div class="card-header" id="formHeader">Yeni SSID Ekle veya Düzenle</div>
+      <div class="card-body">
+        <fieldset id="newSsidFieldset" disabled>
+          <div class="mb-3">
+            <label class="form-label">SSID Adı</label>
+            <input type="text" id="ssid" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Parola</label>
+            <input type="password" id="password" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">VLAN Seçimi</label>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" id="noVlanCheckbox" checked onchange="toggleVlanDisable()">
+              <label class="form-check-label" for="noVlanCheckbox">VLAN yok</label>
+            </div>
+            <select id="vlanSelect" class="form-select" disabled></select>
+            <div id="vlanCustomGroup" class="d-flex mt-2" style="display:none; gap:.5rem;">
+              <input type="text" id="vlanId" class="form-control" placeholder="VLAN ID">
+              <input type="text" id="vlanDesc" class="form-control" placeholder="Açıklama">
+            </div>
+          </div>
+          <button id="applyBtn" class="btn btn-success" onclick="handleAddSsid()">Ayarları Uygula</button>
+          <button id="cancelBtn" class="btn btn-secondary ms-2" onclick="cancelEdit()" style="display:none">İptal</button>
+        </fieldset>
+      </div>
+    </div>
   </div>
 
-  <button id="applyDhcpBtn" class="btn btn-secondary mb-3">
-    DHCP Sunucusunu Uygula
-  </button>
-
   <script>
-    // Sayfa açılınca DHCP sunucularını çek ve dropdown’a yerleştir
-    fetch('/api/dhcp_servers')
-      .then(res => res.json())
-      .then(data => {
-        const sel = document.getElementById('dhcpServerSelect');
-        data.servers.forEach(ip => {
-          const opt = document.createElement('option');
-          opt.value = ip;
-          opt.text = ip;
-          sel.add(opt);
-        });
-      })
-      .catch(console.error);
+    let ssidList = [], isEditing = false, editingIndex = null;
 
-    // Seçim değişince input’u da güncelle
-    document.getElementById('dhcpServerSelect')
-      .addEventListener('change', e => {
-        document.getElementById('dhcpServerInput').value = e.target.value;
-      });
+    document.addEventListener('DOMContentLoaded', () => {
+      disableForm();
+      fetchWifiArayuzleri();
+      fetchUplinkArayuzleri();
+      fetchSsids();
+      document.getElementById('wifiInterface')
+              .addEventListener('change', onInterfaceChange);
+    });
 
-    // Uygula butonu
-    document.getElementById('applyDhcpBtn')
-      .addEventListener('click', () => {
-        const server = document.getElementById('dhcpServerInput').value;
-        fetch('/api/set_dhcp_server', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ server })
-        })
-        .then(res => res.json())
+    function disableForm() {
+      document.getElementById('newSsidFieldset').disabled = true;
+    }
+    function enableForm() {
+      document.getElementById('newSsidFieldset').disabled = false;
+    }
+    function toggleVlanDisable() {
+      const noVlan = document.getElementById('noVlanCheckbox').checked;
+      document.getElementById('vlanSelect').disabled = noVlan;
+      document.getElementById('vlanCustomGroup').style.display = noVlan ? 'none' : 'flex';
+    }
+
+    function fetchWifiArayuzleri() {
+      fetch('/api/interfaces')
+        .then(r => r.json())
         .then(data => {
-          if (data.success) {
-            alert('DHCP relay ayarlandı: ' + server);
-          } else {
-            alert('Hata: ' + data.error);
-          }
+          const sel = document.getElementById('wifiInterface');
+          sel.innerHTML = '<option disabled selected>Seçin…</option>';
+          data.interfaces.forEach(iface => sel.append(new Option(iface, iface)));
         })
-        .catch(err => alert('İstek başarısız: ' + err));
-      });
-  </script>
+        .catch(err => console.error('Wi-Fi arayüzleri yüklenirken hata:', err));
+    }
 
-  <!-- …formun devamı… -->
+    function fetchUplinkArayuzleri() {
+      fetch('/api/ethinterfaces')
+        .then(r => r.json())
+        .then(data => {
+          const sel = document.getElementById('uplinkInterface');
+          sel.innerHTML = '<option disabled selected>Seçin…</option>';
+          data.interfaces.forEach(item => {
+            const text = `${item.name} (${item.description})`;
+            sel.append(new Option(text, item.name));
+          });
+        })
+        .catch(err => {
+          console.error('Ağ arayüzleri yüklenirken hata:', err);
+          document.getElementById('uplinkInterface')
+                  .innerHTML = '<option disabled>Yüklenemedi</option>';
+        });
+    }
+
+    function fetchSsids() {
+      fetch('/api/ssids')
+        .then(r => r.json())
+        .then(data => {
+          ssidList = data.ssids;
+          renderList();
+          populateVlanOptions();
+        })
+        .catch(err => console.error('SSID listesi yüklenirken hata:', err));
+    }
+
+    // Aşağıdaki fonksiyonları kendi iş mantığınıza göre tamamlayın:
+    function renderList() { /* SSID listesini göster */ }
+    function populateVlanOptions() { /* VLAN seçeneklerini doldur */ }
+    function onInterfaceChange()  { /* Wi-Fi kartı değiştiğinde */ }
+    function handleAddSsid()      { /* Yeni SSID ekle/güncelle */ }
+    function cancelEdit()         { /* Düzenlemeyi iptal et */ }
+  </script>
+</body>
+</html>
