@@ -17,9 +17,13 @@ RUN apt-get update \
 
 WORKDIR /app
 
+# Önce requirements'i yükle
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app
+# Uygulama dosyalarını kopyala ve entrypoint'e çalıştırma izni ver
+COPY . .
+RUN chmod +x entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+# entrypoint artık WORKDIR içindeki ./entrypoint.sh
+ENTRYPOINT ["./entrypoint.sh"]
