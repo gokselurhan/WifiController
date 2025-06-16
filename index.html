@@ -10,7 +10,7 @@
     .card { margin-bottom: 30px; }
     .qrcode { margin-top: 10px; }
 
-    /* QR-Göster popup kutusu */
+    /* QR popup */
     .qr-popup {
       position: absolute;
       background: #fff;
@@ -19,27 +19,13 @@
       padding: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       z-index: 1000;
-      min-width: 200px;
-      min-height: 200px;
       visibility: hidden;
     }
     .qr-popup .close-btn {
       position: absolute;
-      top: 8px;
-      right: 8px;
-      font-size: 1.2rem;
-      color: #888;
-      background: #fff;
-      border: none;
-      cursor: pointer;
-      line-height: 1;
-      transition: color 0.2s;
-    }
-    .qr-popup .close-btn:hover { color: #e22; }
-
-    /* Düzenleme modundaki satır stili */
-    .edit-row {
-      background: #fff3cd;
+      top: 8px; right: 8px;
+      background: none; border: none;
+      font-size: 1.2rem; cursor: pointer;
     }
   </style>
 </head>
@@ -47,7 +33,7 @@
   <div class="container">
     <h2 class="mb-4">WiFi Controller Panel</h2>
 
-    <!-- Wi-Fi Kartı Seç -->
+    <!-- Wi-Fi Kartı Seçimi -->
     <div class="card mb-4">
       <div class="card-header">Wi-Fi Kartı Seç</div>
       <div class="card-body">
@@ -62,8 +48,8 @@
     <div class="card mb-4">
       <div class="card-header">Ethernet Uplink Arayüzü</div>
       <div class="card-body">
-        <p>Aşağıda sistemdeki Ethernet arayüzleri listelenmiştir.<br>
-           Wi-Fi erişim noktasından gelen trafiğin çıkış (uplink) yapacağı Ethernet arayüzünü seçin.</p>
+        <p>Aşağıda sistemdeki arayüzler listelenmiştir.<br>
+           Wi-Fi trafiğinin çıkış (uplink) yapacağı arayüzü seçin.</p>
         <select id="uplinkInterface" class="form-select">
           <option value="" disabled selected>Yükleniyor…</option>
         </select>
@@ -78,8 +64,8 @@
       </div>
     </div>
 
-    <!-- Yeni/ Düzenle SSID Formu -->
-    <div class="card">
+    <!-- Yeni / Düzenle SSID Formu -->
+    <div class="card mb-4">
       <div class="card-header" id="formHeader">Yeni SSID Ekle veya Düzenle</div>
       <div class="card-body">
         <fieldset id="newSsidFieldset" disabled>
@@ -89,10 +75,10 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Parola</label>
-            <input type="text" id="password" class="form-control">
+            <input type="password" id="password" class="form-control">
           </div>
           <div class="mb-3">
-            <label class="form-label">VLAN ID</label>
+            <label class="form-label">VLAN Seçimi</label>
             <div class="form-check mb-2">
               <input class="form-check-input" type="checkbox" id="noVlanCheckbox" checked onchange="toggleVlanDisable()">
               <label class="form-check-label" for="noVlanCheckbox">VLAN yok</label>
@@ -106,77 +92,82 @@
           <button id="applyBtn" class="btn btn-success" onclick="handleAddSsid()">Ayarları Uygula</button>
           <button id="cancelBtn" class="btn btn-secondary ms-2" onclick="cancelEdit()" style="display:none">İptal</button>
         </fieldset>
-
-        <!-- Geçici QR & mesaj yalnızca ekleme anında -->
-        <div id="newWifiMessage" class="mt-3"></div>
       </div>
     </div>
   </div>
 
   <script>
-    // Kart başına limiti burada tanımlayın; tanımsızsa sınırsız
-    const maxBroadcasts = {
-      // örn: 'wls160': 1
-    };
-
     let ssidList = [], isEditing = false, editingIndex = null;
 
-    document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener('DOMContentLoaded', () => {
       disableForm();
       fetchInterfaces();
-      fetchSsids();
       fetchUplinkInterfaces();
-      document.getElementById("wifiInterface")
-              .addEventListener("change", onInterfaceChange);
+      fetchSsids();
+      document.getElementById('wifiInterface')
+              .addEventListener('change', onInterfaceChange);
     });
 
     function disableForm() {
-      document.getElementById("newSsidFieldset").disabled = true;
+      document.getElementById('newSsidFieldset').disabled = true;
     }
     function enableForm() {
-      document.getElementById("newSsidFieldset").disabled = false;
+      document.getElementById('newSsidFieldset').disabled = false;
+    }
+    function toggleVlanDisable() {
+      const noVlan = document.getElementById('noVlanCheckbox').checked;
+      document.getElementById('vlanSelect').disabled = noVlan;
+      document.getElementById('vlanCustomGroup').style.display = noVlan ? 'none' : 'flex';
     }
 
     function fetchInterfaces() {
       fetch('/api/interfaces')
-        .then(res => res.json())
+        .then(r => r.json())
         .then(data => {
-          const sel = document.getElementById("wifiInterface");
-          sel.innerHTML = '<option value="" disabled selected>Seçin…</option>';
-          data.interfaces.forEach(iface => sel.append(new Option(iface, iface)));
-        });
+          const sel = document.getElementById('wifiInterface');
+          sel.innerHTML = '<option disabled selected>Seçin…</option>';
+          data.interfaces.forEach(iface => {
+            sel.append(new Option(iface, iface));
+          });
+        })
+        .catch(err => console.error('Wi-Fi arayüzleri yüklenirken:', err));
     }
 
-    // Ethernet uplink arayüzlerini getirip doldurur
     function fetchUplinkInterfaces() {
       fetch('/api/ethinterfaces')
         .then(r => r.json())
         .then(data => {
           const sel = document.getElementById('uplinkInterface');
-          sel.innerHTML = '<option value="" disabled selected>Seçin…</option>';
-          data.interfaces.forEach(iface => {
-            sel.append(new Option(iface, iface));
+          sel.innerHTML = '<option disabled selected>Seçin…</option>';
+          data.interfaces.forEach(item => {
+            const text = `${item.name} (${item.description})`;
+            sel.append(new Option(text, item.name));
           });
         })
         .catch(err => {
-          console.error('Uplink arayüzleri yüklenirken hata:', err);
-          const sel = document.getElementById('uplinkInterface');
-          sel.innerHTML = '<option disabled>Yüklenemedi</option>';
+          console.error('Arayüzler yüklenirken hata:', err);
+          document.getElementById('uplinkInterface')
+                  .innerHTML = '<option disabled>Yüklenemedi</option>';
         });
     }
 
     function fetchSsids() {
       fetch('/api/ssids')
-        .then(res => res.json())
+        .then(r => r.json())
         .then(data => {
           ssidList = data.ssids;
           renderList();
           populateVlanOptions();
-          onInterfaceChange();
-        });
+        })
+        .catch(err => console.error('SSID listesi yüklenirken:', err));
     }
 
-    // … Mevcut diğer fonksiyonlarınız: renderList, handleAddSsid, onInterfaceChange, toggleVlanDisable, populateVlanOptions, cancelEdit vb.
+    // TODO: Aşağıdaki fonksiyonları kendi kodunuza uygun şekilde implemente edin:
+    function renderList() { /* ... */ }
+    function populateVlanOptions() { /* ... */ }
+    function onInterfaceChange() { /* ... */ }
+    function handleAddSsid() { /* ... */ }
+    function cancelEdit() { /* ... */ }
   </script>
 </body>
 </html>
