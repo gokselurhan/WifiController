@@ -5,9 +5,8 @@ ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND}
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      hostapd iproute2 iw bridge-utils net-tools procps \
-      isc-dhcp-relay nmap \
-  && rm -rf /var/lib/apt/lists/*
+      hostapd iproute2 iw bridge-utils net-tools procps isc-dhcp-relay nmap \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -15,10 +14,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Uygulama ve statik index.html
-COPY . .
+# Uygulama kodu (index.html bind-mount ile gelecek)
+COPY app.py entrypoint.sh ./
 
-# entrypoint çalıştırılabilir yapsın
 RUN chmod +x entrypoint.sh
 
 ENTRYPOINT ["./entrypoint.sh"]
