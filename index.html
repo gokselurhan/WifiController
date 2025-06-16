@@ -9,6 +9,8 @@
     body { background: #f8f9fa; padding: 40px; }
     .card { margin-bottom: 30px; }
     .qrcode { margin-top: 10px; }
+
+    /* QR-Göster popup kutusu */
     .qr-popup {
       position: absolute;
       background: #fff;
@@ -17,12 +19,32 @@
       padding: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       z-index: 1000;
+      min-width: 200px;
+      min-height: 200px;
       visibility: hidden;
     }
     .qr-popup .close-btn {
-      position: absolute; top: 8px; right: 8px;
-      background: none; border: none; font-size: 1.2rem; cursor: pointer;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 1.2rem;
+      color: #888;
+      background: #fff;
+      border: none;
+      cursor: pointer;
+      line-height: 1;
+      transition: color 0.2s;
     }
+    .qr-popup .close-btn:hover { color: #e22; }
+
+    /* Düzenleme modundaki satır stili */
+    .list-group-item-editing {
+      background-color: #e9ecef;
+      opacity: 0.7;
+    }
+
+    /* Liste satırının relative olması, popup'ı konumlamak için */
+    #ssidList li { position: relative; }
   </style>
 </head>
 <body>
@@ -195,135 +217,4 @@
             pwd    = document.getElementById("password").value.trim(),
             iface  = document.getElementById("wifiInterface").value;
 
-      let vlan = document.getElementById("noVlanCheckbox").checked
-        ? "Yok"
-        : (() => {
-            const v = document.getElementById("vlanSelect").value;
-            if (v === "custom") {
-              const i = document.getElementById("vlanCustomId").value.trim();
-              const d = document.getElementById("vlanCustomDesc").value.trim();
-              if (!i||!d){ alert("Özel VLAN boş olamaz!"); return null; }
-              return `${i} - ${d}`;
-            }
-            return v;
-          })();
-      if (vlan===null) return;
-
-      if (!ssidIn||!pwd||!iface) {
-        alert("SSID, parola ve kart seçimi zorunlu!"); return;
-      }
-      if (ssidList.some((x,i)=>
-          x.ssid.toLowerCase()===ssidIn.toLowerCase() &&
-          !(isEditing&&i===editingIndex))) {
-        alert(`"${ssidIn}" zaten kayıtlı!`);
-        return;
-      }
-
-      fetch('/api/ssids',{
-        method: 'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          ssid:ssidIn,
-          password:pwd,
-          vlan,
-          enable:document.getElementById("enable").value,
-          iface
-        })
-      })
-      .then(r=>r.ok ? r.json() : r.json().then(e=>{throw new Error(e.error)}))
-      .then(_=>{
-        document.getElementById("newWifiMessage").innerHTML = `
-          <div class="alert alert-light border-secondary p-2">
-            <strong>${ssidIn}</strong> eklendi. QR ile bağlanabilirsiniz.
-            <div class="qrcode mt-2" id="tempQr"></div>
-          </div>`;
-        new QRCode(document.getElementById("tempQr"), {
-          text:`WIFI:T:WPA;S:${ssidIn};P:${pwd};;`,
-          width:180, height:180
-        });
-        isEditing = false;
-        fetchSsids();
-      })
-      .catch(e=>alert("Hata: "+e.message));
-    }
-
-    function renderList() {
-      const ul = document.getElementById("ssidList");
-      ul.innerHTML = "";
-      if (!ssidList.length) {
-        ul.innerHTML = `
-          <li class="list-group-item fst-italic text-muted">
-            Henüz tanımlı SSID yok
-          </li>`;
-        return;
-      }
-      ssidList.forEach((it, idx) => {
-        const li = document.createElement("li");
-        li.className = "list-group-item d-flex justify-content-between align-items-center";
-        li.innerHTML = `
-          <div>
-            <strong>${it.ssid}</strong>
-            (VLAN: ${it.vlan}) [${it.enable==1?"Aktif":"Pasif"}]
-            (Kart: ${it.iface})
-          </div>
-          <div>
-            <button class="btn btn-sm btn-primary me-2" onclick="startEditSsid(${idx})">Düzenle</button>
-            <button class="btn btn-sm btn-secondary me-2" onclick="showQrModal('${it.ssid}','${it.password}')">QR Göster</button>
-            <button class="btn btn-sm btn-warning me-2" onclick="alert('Parola: ${it.password}')">Parola Göster</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteSsid(${idx})">Sil</button>
-          </div>`;
-        ul.append(li);
-      });
-    }
-
-    function startEditSsid(idx) {
-      isEditing = true; editingIndex = idx;
-      const it = ssidList[idx];
-      document.getElementById("ssid").value     = it.ssid;
-      document.getElementById("password").value = it.password;
-      document.getElementById("enable").value   = it.enable;
-      document.getElementById("wifiInterface").value = it.iface;
-      if (it.vlan!=="Yok") {
-        document.getElementById("noVlanCheckbox").checked = false;
-        toggleVlanDisable();
-        if (it.vlan.includes(" - ")) {
-          document.getElementById("vlanSelect").value = "custom";
-          const parts = it.vlan.split(" - ");
-          document.getElementById("vlanCustomId").value = parts[0];
-          document.getElementById("vlanCustomDesc").value = parts[1];
-        } else {
-          document.getElementById("vlanSelect").value = it.vlan;
-        }
-      } else {
-        document.getElementById("noVlanCheckbox").checked = true;
-        toggleVlanDisable();
-      }
-      enableForm();
-      document.getElementById("cancelBtn").style.display = "inline-block";
-    }
-
-    function cancelEdit() {
-      isEditing = false; editingIndex = null;
-      document.getElementById("ssid").value = "";
-      document.getElementById("password").value = "";
-      document.getElementById("enable").value = "1";
-      document.getElementById("wifiInterface").value = "";
-      document.getElementById("noVlanCheckbox").checked = true;
-      toggleVlanDisable();
-      disableForm();
-      document.getElementById("cancelBtn").style.display = "none";
-      document.getElementById("newWifiMessage").innerHTML = "";
-    }
-
-    function deleteSsid(idx) {
-      fetch(`/api/ssids/${idx}`, { method: 'DELETE' })
-        .then(() => fetchSsids())
-        .catch(e => alert("Silme hatası: "+e.message));
-    }
-
-    function showQrModal(ssid, pwd) {
-      alert(`SSID: ${ssid}\nParola: ${pwd}`);
-    }
-  </script>
-</body>
-</html>
+      let vlan = document.getElementById("no
