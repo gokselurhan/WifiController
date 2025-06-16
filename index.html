@@ -174,14 +174,27 @@
     }
 
     function fetchWifiArayuzleri() {
+      const sel = document.getElementById('wifiInterface');
+      sel.innerHTML = '<option disabled selected>Yükleniyor…</option>';
+
       fetch('/api/interfaces')
-        .then(r => r.json())
-        .then(data => {
-          const sel = document.getElementById('wifiInterface');
-          sel.innerHTML = '<option disabled selected>Seçin…</option>';
-          data.interfaces.forEach(i => sel.append(new Option(i, i)));
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
         })
-        .catch(e => console.error(e));
+        .then(data => {
+          console.log('⏳ interfaces response:', data);
+          if (!Array.isArray(data.interfaces) || !data.interfaces.length) {
+            sel.innerHTML = '<option disabled>Hiç Wi-Fi kartı bulunamadı</option>';
+          } else {
+            sel.innerHTML = '<option disabled selected>Seçin…</option>';
+            data.interfaces.forEach(i => sel.append(new Option(i, i)));
+          }
+        })
+        .catch(e => {
+          console.error('Wi-Fi kartları yüklenemedi:', e);
+          sel.innerHTML = '<option disabled>Yüklenemedi</option>';
+        });
     }
 
     function fetchUplinkArayuzleri() {
@@ -189,32 +202,4 @@
         .then(r => r.json())
         .then(data => {
           const sel = document.getElementById('uplinkInterface');
-          sel.innerHTML = '<option disabled selected>Seçin…</option>';
-          data.interfaces.forEach(item => {
-            const txt = `${item.name} (${item.description})`;
-            sel.append(new Option(txt, item.name));
-          });
-        })
-        .catch(e => {
-          console.error(e);
-          document.getElementById('uplinkInterface')
-                  .innerHTML = '<option disabled>Yüklenemedi</option>';
-        });
-    }
-
-    function fetchSsids() {
-      fetch('/api/ssids')
-        .then(r => r.json())
-        .then(data => {
-          ssidList = data.ssids;
-          renderList();
-        })
-        .catch(e => console.error(e));
-    }
-
-    function handleAddSsid() {
-      const ssidIn = document.getElementById("ssid").value.trim(),
-            pwd    = document.getElementById("password").value.trim(),
-            iface  = document.getElementById("wifiInterface").value;
-
-      let vlan = document.getElementById("no
+          sel.inner
