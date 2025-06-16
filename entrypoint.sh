@@ -1,53 +1,52 @@
 #!/bin/bash
 set -e
 
-UPLINK=${UPLINK:-ens192}
-WIFI_IFACE=${WIFI_IFACE:-wls160}
-BRIDGE=${BRIDGE:-br0}
+# Eğer START_NETWORK=yes verilmediyse, bridge/DHCP-relay/hostapd atlanacak.
+if [ "$START_NETWORK" = "yes" ]; then
+  echo ">>> NETWORK SETUP: Başlatılıyor…"
 
-# 1) Bridge yarat (mevcutsa hata yoksay) ve aktif et
-ip link add name $BRIDGE type bridge 2>/dev/null || true
-ip link set dev $BRIDGE up
+  UPLINK=${UPLINK:-ens192}
+  WIFI_IFACE=${WIFI_IFACE:-wls160}
+  BRIDGE=${BRIDGE:-br0}
 
-# 2) Uplink & Wi-Fi’ı köprüye ekle
-ip link set dev $UPLINK up
-ip link set dev $WIFI_IFACE up
-ip link set dev $UPLINK master $BRIDGE
-ip link set dev $WIFI_IFACE master $BRIDGE
+  # 1) Bridge’i hazırla
+  ip link add name $BRIDGE type bridge 2>/dev/null || true
+  ip link set dev $BRIDGE up
 
-# 3) Önce DHCP ile br0’e IP almayı dene
-echo ">>> DHCP ile $BRIDGE üzerinden IP alınıyor…"
-if dhclient -v $BRIDGE; then
-  echo ">>> br0’e IP atandı."
-  # 4) Şimdi uplink’teki eski IP’yi temizle
+  # 2) Uplink + Wi-Fi’ı köprüye ekle
+  ip link set dev $UPLINK up
+  ip link set dev $WIFI_IFACE up
+  ip link set dev $UPLINK master $BRIDGE
+  ip link set dev $WIFI_IFACE master $BRIDGE
+
+  # 3) Uplink’ten IP sil, 4) DHCP ile bridge’e IP al
   ip addr flush dev $UPLINK
-else
-  echo "!!! br0’e IP atanamadı, uplink IP korunuyor."
-fi
+  echo ">>> DHCP ile $BRIDGE’e IP alınıyor…"
+  dhclient -v $BRIDGE
 
-# 5) Lease dosyasından upstream DHCP sunucusunu bul
-LEASE_FILE=$(ls /var/lib/dhcp/dhclient.* | grep $BRIDGE | head -1 || true)
-if [ -f "$LEASE_FILE" ]; then
+  # 5) Lease’den DHCP sunucusunu tespit et
+  LEASE_FILE=$(ls /var/lib/dhcp/dhclient.* | grep $BRIDGE | head -1 || true)
+  if [ -f "$LEASE_FILE" ]; then
     DEFAULT_SERVER=$(grep server-identifier $LEASE_FILE \
                      | tail -1 | awk '{print $3}' | sed 's/;//')
-    echo ">>> Tespit edilen DHCP sunucusu: $DEFAULT_SERVER"
-else
-    echo ">>> Lease dosyası bulunamadı."
-fi
+    echo ">>> Bulunan DHCP sunucusu: $DEFAULT_SERVER"
+  fi
 
-# 6) DHCP relay başlat (env ile override edilebilir)
-DHCP_SERVER="${DHCP_SERVER:-$DEFAULT_SERVER}"
-if [ -n "$DHCP_SERVER" ]; then
-    echo ">>> DHCP relay başlatılıyor: $WIFI_IFACE + $BRIDGE → $DHCP_SERVER"
+  # 6) Relay’i başlat
+  DHCP_SERVER="${DHCP_SERVER:-$DEFAULT_SERVER}"
+  if [ -n "$DHCP_SERVER" ]; then
+    echo ">>> DHCP relay: $WIFI_IFACE + $BRIDGE -> $DHCP_SERVER"
     pkill dhcrelay 2>/dev/null || true
     dhcrelay -i $WIFI_IFACE -i $BRIDGE $DHCP_SERVER &
+  fi
+
+  # 7) hostapd’i başlat
+  echo ">>> hostapd başlatılıyor…"
+  hostapd -B /etc/hostapd/hostapd.conf
+
 else
-    echo ">>> DHCP sunucusu belirtilmedi; relay atlanıyor."
+  echo ">>> START_NETWORK!=yes; bridge/DHCP/hostapd atlandı."
 fi
 
-# 7) hostapd’i arka planda başlat
-echo ">>> hostapd başlatılıyor…"
-hostapd -B /etc/hostapd/hostapd.conf
-
-# 8) Flask uygulamasını başlat
+# Her koşulda önce Flask UI’yi ayağa kaldır
 exec python3 app.py
