@@ -1,51 +1,53 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
-BRIDGE=${BRIDGE:-br0}
-UPLINK=${UPLINK_IFACE:-ens192}
+# Env’den çekiliyor; docker-compose’da tanımlı olmalı:
+UPLINK=${UPLINK:-ens192}
 WIFI_IFACE=${WIFI_IFACE:-wls160}
+BRIDGE=${BRIDGE:-br0}
 
-echo ">>> Bridge: $BRIDGE, Uplink: $UPLINK, Wi-Fi: $WIFI_IFACE"
+### 1) Bridge’i yarat / up et
+ip link add name $BRIDGE type bridge 2>/dev/null || true
+ip link set dev $BRIDGE up
 
-# 1) Bridge oluştur (varsa hata vermez)
-ip link add name "$BRIDGE" type bridge 2>/dev/null || true
-ip link set dev "$BRIDGE" up
+### 2) Uplink + Wi-Fi’ı köprüye ekle
+ip link set dev $UPLINK up
+ip link set dev $WIFI_IFACE up
+ip link set dev $UPLINK master $BRIDGE
+ip link set dev $WIFI_IFACE master $BRIDGE
 
-# 2) Önce eski köprülemeyi kaldır (eğer önceden master yapılmışlarsa)
-for IF in $(bridge link | awk -v br="$BRIDGE" '$1==br{print $4}'); do
-  ip link set dev "$IF" nomaster
-done
+### 3) Uplink’ten eski IP’yi temizle
+ip addr flush dev $UPLINK
 
-# 3) Uplink ve Wi-Fi’ı bridge’e ekle
-ip link set dev "$UPLINK" up
-ip link set dev "$WIFI_IFACE" up
-ip link set dev "$UPLINK" master "$BRIDGE"
-ip link set dev "$WIFI_IFACE" master "$BRIDGE"
+### 4) Bridge’e DHCP ile IP al
+echo ">>> DHCP ile $BRIDGE üzerinden IP alınıyor…"
+dhclient -v $BRIDGE
 
-# 4) hostapd.conf hazırla (tek SSID örnek)
-cat > /etc/hostapd/hostapd.conf <<EOF
-interface=$WIFI_IFACE
-driver=nl80211
-ssid=${SSID}
-hw_mode=g
-channel=${CHANNEL}
-bridge=$BRIDGE
-EOF
+### 5) Lease dosyasından upstream DHCP sunucusunu tespit et
+LEASE_FILE=$(ls /var/lib/dhcp/dhclient.* | grep $BRIDGE | head -1 || true)
+if [ -f "$LEASE_FILE" ]; then
+    DEFAULT_SERVER=$(grep server-identifier $LEASE_FILE \
+                     | tail -1 \
+                     | awk '{print $3}' \
+                     | sed 's/;//')
+    echo ">>> Tespit edilen DHCP sunucusu: $DEFAULT_SERVER"
+else
+    echo ">>> Lease dosyası bulunamadı: $LEASE_FILE"
+fi
 
-# 5) Hostapd başlat
-echo ">>> Starting hostapd…"
+### 6) DHCP_RELAY başlat (override yoksa DEFAULT_SERVER’ı kullan)
+DHCP_SERVER="${DHCP_SERVER:-$DEFAULT_SERVER}"
+if [ -n "$DHCP_SERVER" ]; then
+    echo ">>> DHCP relay başlatılıyor: $WIFI_IFACE, $BRIDGE → $DHCP_SERVER"
+    pkill dhcrelay 2>/dev/null || true
+    dhcrelay -i $WIFI_IFACE -i $BRIDGE $DHCP_SERVER &
+else
+    echo ">>> DHCP sunucusu belirtilmedi; relay atlanıyor."
+fi
+
+### 7) Hostapd’i başlat
+echo ">>> hostapd başlatılıyor…"
 hostapd -B /etc/hostapd/hostapd.conf
 
-# 6) (İsteğe bağlı) Ek bir Guest SSID isterseniz,
-#    hostapd multi-BSS ile şöyle ekleyebilirsiniz:
-# bridge=$GUEST_BRIDGE
-# bss=$WIFI_IFACE-guest
-# ssid=$GUEST_SSID
-#
-# Aynı mantıkla başka köprüler (br_guest vb) da entrypoint’te 
-# ip link add …, ip link set nomaster/ master …  
-# ve hostapd.conf’a bss blokları ile eklenir.
-
-# 7) Flask API başlat
-echo ">>> Starting Flask…"
-exec python app.py --host=0.0.0.0 --port=5000
+### 8) Flask uygulamasını ayağa kaldır
+exec python3 app.py
