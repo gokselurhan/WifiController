@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request, send_from_directory
 import subprocess
+import time
 import re
 import os
 
@@ -108,7 +109,9 @@ def manage_ssids():
     except Exception as e:
         return jsonify({"error":f"Dosyaya yazılamadı: {e}"}),500
 
-    subprocess.run(["pkill","hostapd"], check=False)
+   # Hostapd'yi önce zorla öldür, kısa süre bekle, sonra yeniden başlat
+   subprocess.run(["pkill","-9","hostapd"], check=False)
+    time.sleep(0.5)
     subprocess.run(["hostapd","-B",SSID_FILE], check=False)
     return jsonify({"message":"Yeni SSID eklendi ve yayın güncellendi."}),201
 
