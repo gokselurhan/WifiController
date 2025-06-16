@@ -1,25 +1,23 @@
 from flask import Flask, jsonify, request, send_from_directory
 import subprocess
-import os
 import re
+import os
 
 app = Flask(__name__)
 
-BASE_DIR = os.path.dirname(__file__)
-SSID_FILE = "/etc/hostapd/hostapd.conf"
-
-# Donanımın desteklediği AP sayısını dinamik olarak al
+BASE_DIR   = os.path.dirname(__file__)
+SSID_FILE  = "/etc/hostapd/hostapd.conf"
 
 def get_ap_limit():
+    """`iw list` çıktısından #{ AP } <= N değerini bulur ve int olarak döner."""
     try:
-        res = subprocess.run("iw list", shell=True, capture_output=True, text=True)
-        for line in res.stdout.splitlines():
-            m = re.search(r"#\{\s*AP\s*\}\s*<=\s*(\d+)", line)
-            if m:
-                return int(m.group(1))
+        output = subprocess.check_output("iw list", shell=True, text=True)
+        m = re.search(r"#\{\s*AP\s*\}\s*<=\s*(\d+)", output)
+        if m:
+            return int(m.group(1))
     except:
         pass
-    return 1
+    return 1  # Eğer parse edilemezse 1 SSID ile devam
 
 @app.route('/api/aplimit')
 def ap_limit():
@@ -42,14 +40,14 @@ def interfaces():
 def eth_interfaces():
     all_ifaces = sorted(os.listdir('/sys/class/net'))
     def describe(iface):
-        if iface == 'lo': return 'Döngü arayüzü (loopback)'
+        if iface == 'lo':   return 'Döngü arayüzü (loopback)'
         if iface.startswith(('wl','wlan','wlp')): return 'Kablosuz (Wi-Fi)'
         if iface.startswith(('eth','enp','ens','eno','enx')): return 'Ethernet'
         if iface == 'docker0': return 'Docker köprü ağı'
-        if iface.startswith('br-'): return 'Bridge'
-        if iface.startswith('veth'): return 'Sanal Ethernet'
-        if iface.startswith('tun'): return 'TUN/TAP VPN'
-        if iface.startswith('wg'): return 'WireGuard VPN'
+        if iface.startswith('br-'):   return 'Bridge'
+        if iface.startswith('veth'):  return 'Sanal Ethernet'
+        if iface.startswith('tun'):   return 'TUN/TAP VPN'
+        if iface.startswith('wg'):    return 'WireGuard VPN'
         if iface.startswith('virbr'): return 'Libvirt bridge'
         return 'Bilinmeyen arayüz'
     uplinks = [{"name": i, "description": describe(i)} for i in all_ifaces]
@@ -58,7 +56,6 @@ def eth_interfaces():
 @app.route('/api/ssids', methods=['GET','POST'])
 def manage_ssids():
     if request.method == 'GET':
-        # Multi-block parse
         if not os.path.exists(SSID_FILE):
             return jsonify({"ssids": []})
         ssids = []
@@ -90,14 +87,12 @@ def manage_ssids():
             ssids.append(current)
         return jsonify({"ssids": ssids})
 
-    # POST: append mode
+    # POST: yeni bloğu append et
     data = request.get_json(force=True)
     pwd = data.get('password','')
     if not (8 <= len(pwd) <= 63):
         return jsonify({"error":"Parola 8–63 karakter olmalı."}),400
-    # check limit via API
-    if len([s for s in manage_ssids().get_json()['ssids']]) >= get_ap_limit():
-        return jsonify({"error": f"Bu kart en fazla {get_ap_limit()} SSID yayınını destekliyor."}),400
+
     try:
         with open(SSID_FILE, 'a') as f:
             f.write("\n# Eklenen SSID\n")
@@ -133,6 +128,7 @@ def delete_ssid(index):
             blocks.append(current)
     if index < 0 or index >= len(blocks):
         return jsonify({"error":"Geçersiz index."}),400
+
     blocks.pop(index)
     try:
         with open(SSID_FILE, 'w') as f:
@@ -142,6 +138,7 @@ def delete_ssid(index):
                 f.write("\n")
     except Exception as e:
         return jsonify({"error":f"Dosyaya yazılamadı: {e}"}),500
+
     subprocess.run(["pkill","hostapd"], check=False)
     subprocess.run(["hostapd","-B",SSID_FILE], check=False)
     return jsonify({"message":"SSID silindi ve yayın güncellendi."}),200
