@@ -11,13 +11,15 @@ RUN apt-get update \
       bridge-utils \
       net-tools \
       procps \
+      isc-dhcp-relay \
+      nmap \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-RUN chmod +x entrypoint.sh
 
-EXPOSE 5000
-ENTRYPOINT ["./entrypoint.sh"]
+COPY . /app
+
+ENTRYPOINT ["/entrypoint.sh"]
