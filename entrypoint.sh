@@ -6,9 +6,9 @@ DHCP_SERVERS=${DHCP_RELAY_SERVERS:-192.168.1.1}
 UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
 
 # 1) IPv4 forwarding aktif et
-sysctl -w net.ipv4.ip_forward=1
+/sbin/sysctl -w net.ipv4.ip_forward=1
 
-# 2) DHCP Relay konfigürasyonu - KESİN ÇÖZÜM
+# 2) DHCP Relay konfigürasyonu
 echo "DHCP Relay konfigürasyonu yapılıyor..."
 cat > /etc/default/isc-dhcp-relay <<EOF
 # Otomatik oluşturuldu - WiFi Kontrol Paneli
@@ -17,13 +17,11 @@ INTERFACES=""
 OPTIONS=""
 EOF
 
-# 3) Konfigürasyon dosyasını kontrol et
-echo "Konfigürasyon dosyası içeriği:"
-cat /etc/default/isc-dhcp-relay
-
-# 4) Fiziksel phy cihazını tespit et
+# 3) Fiziksel phy cihazını tespit et
 PHY=$(iw dev | awk '$1=="phy"{print $2; exit}')
 
+# 4) Varsayılan AP arayüzünüzü bulun
+PRIMARY_IFACE=$(iw dev | awk '$1=="Interface"{print $2; exit}')
 
 # 5) Sanal AP arayüzü oluştur
 if [ -n "$PHY" ] && [ -n "$PRIMARY_IFACE" ]; then
