@@ -1,18 +1,11 @@
-FROM python:3.11-slim
-
-RUN apt-get update && apt-get install -y \
-    hostapd iproute2 iw net-tools iptables procps \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY . /app
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+EXPOSE 80
 
-RUN chmod +x entrypoint.sh
-
-EXPOSE 5000
-
-ENTRYPOINT ["./entrypoint.sh"]
+CMD ["bash", "entrypoint.sh"]
