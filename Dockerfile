@@ -11,6 +11,8 @@ RUN apt-get update && \
     iptables \
     wireless-tools \
     wpasupplicant \
+    vlan \
+    kmod \  # Bu satırı ekleyin
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/default
