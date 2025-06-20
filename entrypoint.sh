@@ -4,16 +4,16 @@ set -e
 # 1) IPv4 forwarding aktif et
 sysctl -w net.ipv4.ip_forward=1
 
-# 2) NAT (kablosuzdan geleni kabloluya yönlendirmek için)
-iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+# 2) DHCP Relay servisini başlat
+service isc-dhcp-relay start
 
-# 3) Fiziksel phy cihazını tespit et (ilk bulunanı alıyoruz)
+# 3) Fiziksel phy cihazını tespit et
 PHY=$(iw dev | awk '$1=="phy"{print $2; exit}')
 
-# 4) Varsayılan AP arayüzünüzü bulun (örneğin wlan0)
+# 4) Varsayılan AP arayüzünüzü bulun
 PRIMARY_IFACE=$(iw dev | awk '$1=="Interface"{print $2; exit}')
 
-# 5) Sanal AP arayüzü oluştur (wlan0_1) — destekliyorsa
+# 5) Sanal AP arayüzü oluştur
 if [ -n "$PHY" ] && [ -n "$PRIMARY_IFACE" ]; then
   if ! iw dev | grep -q "${PRIMARY_IFACE}_1"; then
     echo "Sanal AP arayüzü oluşturuluyor: ${PRIMARY_IFACE}_1"
@@ -22,7 +22,7 @@ if [ -n "$PHY" ] && [ -n "$PRIMARY_IFACE" ]; then
   fi
 fi
 
-# 6) hostapd varsa başlat (multi-BSS destekliyorsa hem wlan0 hem wlan0_1’i konfigürasyonda yayınlayabilecek)
+# 6) hostapd varsa başlat
 if [ -f /etc/hostapd/hostapd.conf ]; then
   echo "hostapd başlatılıyor..."
   hostapd -B /etc/hostapd/hostapd.conf
@@ -30,18 +30,5 @@ else
   echo "hostapd config dosyası yok, hostapd başlatılmadı."
 fi
 
-# 7) DHCP relay başlat (relay_config.txt varsa)
-RELAY_CONFIG="/etc/hostapd/relay_config.txt"
-if [ -f "$RELAY_CONFIG" ]; then
-  while read -r line; do
-    IFACE=$(echo "$line" | cut -d: -f1)
-    VLAN=$(echo "$line" | cut -d: -f2)
-    # Varsayılan DHCP sunucu IP'si: 192.168.<VLAN>.1
-    SERVER_IP="192.168.${VLAN}.1"
-    echo "DHCP relay başlatılıyor: $IFACE -> $SERVER_IP"
-    dhcrelay -i "$IFACE" "$SERVER_IP" &
-  done < "$RELAY_CONFIG"
-fi
-
-# 8) Flask uygulamasını çalıştır
+# 7) Flask uygulamasını çalıştır
 exec python app.py
