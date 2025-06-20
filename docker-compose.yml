@@ -2,16 +2,24 @@ version: '3.8'
 
 services:
   wifi-controller:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dockerfile
     container_name: wifi-controller
     network_mode: host
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
+      - NET_RAW
       - SYS_ADMIN
     privileged: true
     volumes:
       - .:/app
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
     environment:
       - DHCP_RELAY_SERVERS=192.168.1.1
       - UPLINK_INTERFACE=eth0
