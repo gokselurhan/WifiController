@@ -1,5 +1,13 @@
 FROM python:3.9-slim
 
+# Linux kernel headers'larını yükle
+RUN apt-get update && \
+    apt-get install -y \
+    linux-headers-$(uname -r) \
+    kmod \
+    && rm -rf /var/lib/apt/lists/*
+
+# Geri kalan kurulumlar
 RUN apt-get update && \
     apt-get install -y \
     procps \
@@ -12,8 +20,12 @@ RUN apt-get update && \
     wireless-tools \
     wpasupplicant \
     vlan \
-    kmod \
     && rm -rf /var/lib/apt/lists/*
+
+# Kernel modüllerini host'tan konteynere kopyala
+RUN mkdir -p /lib/modules/$(uname -r)
+COPY /lib/modules/$(uname -r)/ /lib/modules/$(uname -r)/
+RUN depmod -a
 
 RUN mkdir -p /etc/default
 RUN mkdir -p /etc/hostapd
