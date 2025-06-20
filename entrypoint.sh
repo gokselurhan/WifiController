@@ -5,8 +5,6 @@ set -e
 DHCP_SERVERS=${DHCP_RELAY_SERVERS:-192.168.1.1}
 UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
 
-# IPv4 forwarding aktif et - KALDIRILDI (host network'te izin verilmiyor)
-
 # VLAN desteği için kernel modülünü yükle
 echo "8021q" >> /etc/modules
 modprobe 8021q
