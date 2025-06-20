@@ -137,4 +137,30 @@ def delete_ssid(index):
     current = []
     with open(SSID_FILE) as f:
         for line in f:
-            if line.strip().startswith('interface='):
+            if line.strip().startswith('interface=') and current:
+                blocks.append(current)
+                current = []
+            current.append(line)
+        if current:
+            blocks.append(current)
+
+    if index < 0 or index >= len(blocks):
+        return jsonify({"error":"Geçersiz index."}), 400
+
+    blocks.pop(index)
+
+    try:
+        with open(SSID_FILE, 'w') as f:
+            for blk in blocks:
+                for l in blk:
+                    f.write(l)
+                f.write("\n")
+    except Exception as e:
+        return jsonify({"error":f"Dosyaya yazılamadı: {e}"}), 500
+
+    subprocess.run(["pkill","hostapd"], check=False)
+    subprocess.run(["hostapd","-B", SSID_FILE], check=False)
+    return jsonify({"message":"SSID silindi ve yayın güncellendi."}), 200
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000)
