@@ -10,12 +10,12 @@ sysctl -w net.ipv4.ip_forward=1
 
 # 2) DHCP Relay konfigürasyonu
 echo "DHCP Relay konfigürasyonu yapılıyor..."
-cat > /etc/default/isc-dhcp-relay <<EOL
+cat > /etc/default/isc-dhcp-relay <<EOF
 # Otomatik oluşturuldu - WiFi Kontrol Paneli
 SERVERS="$DHCP_SERVERS"
 INTERFACES=""
 OPTIONS=""
-EOL
+EOF
 
 # 3) Fiziksel phy cihazını tespit et
 PHY=$(iw dev | awk '$1=="phy"{print $2; exit}')
