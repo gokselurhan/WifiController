@@ -16,6 +16,9 @@ RUN mkdir -p /etc/default
 WORKDIR /app
 COPY . /app
 
+# Python bağımlılıklarını yükle
+RUN pip install --no-cache-dir -r requirements.txt
+
 RUN chmod +x entrypoint.sh
 
 CMD ["./entrypoint.sh"]
