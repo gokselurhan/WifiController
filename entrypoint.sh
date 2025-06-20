@@ -6,8 +6,15 @@ DHCP_SERVERS=${DHCP_RELAY_SERVERS:-192.168.1.1}
 UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
 
 # VLAN desteği için kernel modülünü yükle
-echo "8021q" >> /etc/modules
-/sbin/modprobe 8021q  # Tam yol kullanıldı
+if ! grep -q 8021q /proc/modules; then
+    echo "802.1q modülü yükleniyor..."
+    if [ -f /lib/modules/$(uname -r)/kernel/net/8021q/8021q.ko ]; then
+        insmod /lib/modules/$(uname -r)/kernel/net/8021q/8021q.ko
+        echo "8021q" >> /etc/modules
+    else
+        echo "Uyarı: 8021q modülü bulunamadı!"
+    fi
+fi
 
 # DHCP Relay konfigürasyonu
 echo "DHCP Relay konfigürasyonu yapılıyor..."
