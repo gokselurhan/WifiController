@@ -23,21 +23,46 @@ def get_ap_limit():
 
 def configure_dhcp_relay(uplink_interface, dhcp_servers="192.168.1.1"):
     """DHCP Relay konfigürasyonunu günceller"""
+    # AP arayüzlerini otomatik tespit et
+    ap_interfaces = []
+    if os.path.exists(SSID_FILE):
+        with open(SSID_FILE, 'r') as f:
+            for line in f:
+                if line.startswith('interface='):
+                    iface = line.split('=')[1].strip()
+                    if iface not in ap_interfaces:
+                        ap_interfaces.append(iface)
+
+    # Tüm arayüzleri birleştir (AP arayüzleri + uplink)
+    all_interfaces = ap_interfaces + [uplink_interface]
+    interfaces_str = " ".join(all_interfaces)
+
     try:
         with open(DHCP_RELAY_CONF, 'w') as f:
             f.write(f"""# Otomatik oluşturuldu - WiFi Kontrol Paneli
 SERVERS="{dhcp_servers}"
-INTERFACES="{uplink_interface}"
-OPTIONS=""
+INTERFACES="{interfaces_str}"
+OPTIONS="-d"
 """)
-        print(f"DHCP Relay konfigürasyonu güncellendi: {uplink_interface}")
+        print(f"DHCP Relay güncellendi: AP={ap_interfaces} Uplink={uplink_interface}")
         
-        # DHCP Relay servisini yeniden başlat
         subprocess.run(["service", "isc-dhcp-relay", "restart"], check=True)
         return True
     except Exception as e:
-        print(f"DHCP Relay konfigürasyon hatası: {str(e)}")
+        print(f"DHCP Relay hatası: {str(e)}")
         return False
+
+def apply_nat_rules(uplink_interface):
+    """NAT kurallarını uygula veya güncelle"""
+    # Eski kuralları temizle
+    subprocess.run(["iptables", "-t", "nat", "-F"], check=False)
+    
+    # Yeni NAT kuralını ekle
+    subprocess.run(
+        ["iptables", "-t", "nat", "-A", "POSTROUTING", "-o", uplink_interface, "-j", "MASQUERADE"],
+        check=True
+    )
+    print(f"NAT kuralları güncellendi: {uplink_interface}")
 
 @app.route('/api/aplimit')
 def ap_limit():
@@ -113,10 +138,11 @@ def manage_ssids():
     if not (8 <= len(pwd) <= 63):
         return jsonify({"error":"Parola 8–63 karakter olmalı."}), 400
     
-    # DHCP Relay konfigürasyonunu güncelle
+    # DHCP Relay ve NAT konfigürasyonunu güncelle
     uplink_interface = data.get('uplink', 'eth0')
     dhcp_servers = data.get('dhcp_servers', '192.168.1.1')
     configure_dhcp_relay(uplink_interface, dhcp_servers)
+    apply_nat_rules(uplink_interface)
 
     try:
         with open(SSID_FILE, 'a') as f:
@@ -133,10 +159,11 @@ def manage_ssids():
     except Exception as e:
         return jsonify({"error":f"Dosyaya yazılamadı: {e}"}), 500
 
-    # Hostapd'yi yeniden başlat
-    subprocess.run(["pkill","-9","hostapd"], check=False)
-    time.sleep(0.5)
-    subprocess.run(["hostapd","-B", SSID_FILE], check=False)
+    # Hostapd'yi yeniden başlat (sadece geçerli konfig varsa)
+    if os.path.exists(SSID_FILE) and os.stat(SSID_FILE).st_size > 0:
+        subprocess.run(["pkill","-9","hostapd"], check=False)
+        time.sleep(0.5)
+        subprocess.run(["hostapd","-B", SSID_FILE], check=False)
 
     return jsonify({"message":"Yeni SSID eklendi ve yayın güncellendi."}), 201
 
@@ -170,8 +197,18 @@ def delete_ssid(index):
     except Exception as e:
         return jsonify({"error":f"Dosyaya yazılamadı: {e}"}), 500
 
-    subprocess.run(["pkill","hostapd"], check=False)
-    subprocess.run(["hostapd","-B", SSID_FILE], check=False)
+    # NAT ve DHCP Relay'i güncelle
+    uplink_interface = request.args.get('uplink', 'eth0')
+    apply_nat_rules(uplink_interface)
+    configure_dhcp_relay(uplink_interface)
+
+    # Hostapd'yi yeniden başlat
+    if os.path.exists(SSID_FILE) and os.stat(SSID_FILE).st_size > 0:
+        subprocess.run(["pkill","hostapd"], check=False)
+        subprocess.run(["hostapd","-B", SSID_FILE], check=False)
+    else:
+        subprocess.run(["pkill","-9","hostapd"], check=False)
+
     return jsonify({"message":"SSID silindi ve yayın güncellendi."}), 200
 
 if __name__ == '__main__':
