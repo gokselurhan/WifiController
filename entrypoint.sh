@@ -7,7 +7,7 @@ UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
 
 # VLAN desteği için kernel modülünü yükle
 echo "8021q" >> /etc/modules
-modprobe 8021q
+/sbin/modprobe 8021q  # Tam yol kullanıldı
 
 # DHCP Relay konfigürasyonu
 echo "DHCP Relay konfigürasyonu yapılıyor..."
