@@ -4,7 +4,7 @@ services:
   wifi-controller:
     build:
       context: .
-      dockerfile: Dockerfile.dockerfile
+      dockerfile: Dockerfile
     container_name: wifi-controller
     network_mode: host
     restart: unless-stopped
