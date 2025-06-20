@@ -1,14 +1,11 @@
-version: '3.8'
+version: '3'
 
 services:
-  wifi-controller:
+  wificontroller:
     build: .
-    container_name: wifi-controller
+    container_name: wificontroller
     network_mode: host
-    restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
-      - SYS_ADMIN
     privileged: true
+    restart: unless-stopped
     volumes:
-      - .:/app
+      - ./data:/etc/hostapd
