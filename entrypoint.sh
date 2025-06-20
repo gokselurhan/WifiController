@@ -8,22 +8,26 @@ UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
 # 1) IPv4 forwarding aktif et
 /sbin/sysctl -w net.ipv4.ip_forward=1
 
-# 2) DHCP Relay konfigürasyonu
+# 2) VLAN desteği için kernel modülünü yükle
+echo "8021q" >> /etc/modules
+modprobe 8021q
+
+# 3) DHCP Relay konfigürasyonu
 echo "DHCP Relay konfigürasyonu yapılıyor..."
 cat > /etc/default/isc-dhcp-relay <<EOF
 # Otomatik oluşturuldu - WiFi Kontrol Paneli
 SERVERS="$DHCP_SERVERS"
 INTERFACES="$UPLINK_IFACE"
-OPTIONS=""
+OPTIONS="-d"
 EOF
 
-# 3) Fiziksel phy cihazını tespit et
+# 4) Fiziksel phy cihazını tespit et
 PHY=$(iw dev | awk '$1=="phy"{print $2; exit}')
 
-# 4) Varsayılan AP arayüzünüzü bulun
+# 5) Varsayılan AP arayüzünüzü bulun
 PRIMARY_IFACE=$(iw dev | awk '$1=="Interface"{print $2; exit}')
 
-# 5) Sanal AP arayüzü oluştur
+# 6) Sanal AP arayüzü oluştur
 if [ -n "$PHY" ] && [ -n "$PRIMARY_IFACE" ]; then
   if ! iw dev | grep -q "${PRIMARY_IFACE}_1"; then
     echo "Sanal AP arayüzü oluşturuluyor: ${PRIMARY_IFACE}_1"
@@ -32,7 +36,7 @@ if [ -n "$PHY" ] && [ -n "$PRIMARY_IFACE" ]; then
   fi
 fi
 
-# 6) hostapd için varsayılan konfig dosyası oluştur
+# 7) hostapd için varsayılan konfig dosyası oluştur
 if [ ! -f /etc/hostapd/hostapd.conf ]; then
   echo "interface=$PRIMARY_IFACE" > /etc/hostapd/hostapd.conf
   echo "driver=nl80211" >> /etc/hostapd/hostapd.conf
@@ -45,17 +49,22 @@ if [ ! -f /etc/hostapd/hostapd.conf ]; then
   echo "rsn_pairwise=CCMP" >> /etc/hostapd/hostapd.conf
 fi
 
-# 7) hostapd başlat
+# 8) hostapd başlat
 echo "hostapd başlatılıyor..."
-hostapd -B /etc/hostapd/hostapd.conf || echo "hostapd başlatılamadı"
+if [ -s /etc/hostapd/hostapd.conf ]; then
+  hostapd -B /etc/hostapd/hostapd.conf || echo "hostapd başlatılamadı"
+else
+  echo "Uyarı: hostapd.conf dosyası boş, hostapd başlatılmadı"
+fi
 
-# 8) DHCP Relay servisini başlat
+# 9) DHCP Relay servisini başlat
 echo "DHCP Relay başlatılıyor..."
 service isc-dhcp-relay restart
 
-# 9) NAT kurallarını uygula
+# 10) NAT kurallarını uygula
 echo "NAT kuralları ayarlanıyor..."
+iptables -t nat -F POSTROUTING
 iptables -t nat -A POSTROUTING -o $UPLINK_IFACE -j MASQUERADE
 
-# 10) Flask uygulamasını çalıştır
+# 11) Flask uygulamasını çalıştır
 exec python app.py
