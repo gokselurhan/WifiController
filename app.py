@@ -21,18 +21,23 @@ def get_ap_limit():
         pass
     return 1  # Eğer parse edilemezse fallback olarak 1 SSID
 
-def configure_dhcp_relay(uplink_interface):
+def configure_dhcp_relay(uplink_interface, dhcp_servers="192.168.1.1"):
     """DHCP Relay konfigürasyonunu günceller"""
     try:
         with open(DHCP_RELAY_CONF, 'w') as f:
             f.write(f"""# Otomatik oluşturuldu - WiFi Kontrol Paneli
-SERVERS=""
-INTERFACES=""
+SERVERS="{dhcp_servers}"
+INTERFACES="{uplink_interface}"
 OPTIONS=""
 """)
         print(f"DHCP Relay konfigürasyonu güncellendi: {uplink_interface}")
+        
+        # DHCP Relay servisini yeniden başlat
+        subprocess.run(["service", "isc-dhcp-relay", "restart"], check=True)
+        return True
     except Exception as e:
         print(f"DHCP Relay konfigürasyon hatası: {str(e)}")
+        return False
 
 @app.route('/api/aplimit')
 def ap_limit():
@@ -109,9 +114,9 @@ def manage_ssids():
         return jsonify({"error":"Parola 8–63 karakter olmalı."}), 400
     
     # DHCP Relay konfigürasyonunu güncelle
-    uplink_interface = data.get('uplink', '')
-    if uplink_interface:
-        configure_dhcp_relay(uplink_interface)
+    uplink_interface = data.get('uplink', 'eth0')
+    dhcp_servers = data.get('dhcp_servers', '192.168.1.1')
+    configure_dhcp_relay(uplink_interface, dhcp_servers)
 
     try:
         with open(SSID_FILE, 'a') as f:
@@ -128,7 +133,7 @@ def manage_ssids():
     except Exception as e:
         return jsonify({"error":f"Dosyaya yazılamadı: {e}"}), 500
 
-    # Hostapd'yi önce zorla öldür, kısa süre bekle, sonra yeniden başlat
+    # Hostapd'yi yeniden başlat
     subprocess.run(["pkill","-9","hostapd"], check=False)
     time.sleep(0.5)
     subprocess.run(["hostapd","-B", SSID_FILE], check=False)
