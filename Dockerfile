@@ -12,7 +12,7 @@ RUN apt-get update && \
     wireless-tools \
     wpasupplicant \
     vlan \
-    kmod \  # Bu satırı ekleyin
+    kmod \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/default
