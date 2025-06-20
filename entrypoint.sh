@@ -5,8 +5,8 @@ set -e
 DHCP_SERVERS=${DHCP_RELAY_SERVERS:-192.168.1.1}
 UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
 
-# 1) IPv4 forwarding aktif et
-/sbin/sysctl -w net.ipv4.ip_forward=1
+# 1) IPv4 forwarding aktif et - KALDIRILDI (host network'te izin verilmiyor)
+# /sbin/sysctl -w net.ipv4.ip_forward=1
 
 # 2) VLAN desteği için kernel modülünü yükle
 echo "8021q" >> /etc/modules
