@@ -10,31 +10,39 @@ UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
 
 # 2) DHCP Relay konfigürasyonu
 echo "DHCP Relay konfigürasyonu yapılıyor..."
-mkdir -p /etc/default
 cat > /etc/default/isc-dhcp-relay <<EOF
 # Otomatik oluşturuldu - WiFi Kontrol Paneli
 SERVERS="$DHCP_SERVERS"
-INTERFACES=""
+INTERFACES="$UPLINK_IFACE"
 OPTIONS=""
 EOF
 
-# 3) hostapd.conf için dizin oluştur
-mkdir -p /etc/hostapd
-touch /etc/hostapd/hostapd.conf
-
-# 4) Fiziksel phy cihazını tespit et
+# 3) Fiziksel phy cihazını tespit et
 PHY=$(iw dev | awk '$1=="phy"{print $2; exit}')
 
-# 5) Varsayılan AP arayüzünüzü bulun
+# 4) Varsayılan AP arayüzünüzü bulun
 PRIMARY_IFACE=$(iw dev | awk '$1=="Interface"{print $2; exit}')
 
-# 6) Sanal AP arayüzü oluştur
+# 5) Sanal AP arayüzü oluştur
 if [ -n "$PHY" ] && [ -n "$PRIMARY_IFACE" ]; then
   if ! iw dev | grep -q "${PRIMARY_IFACE}_1"; then
     echo "Sanal AP arayüzü oluşturuluyor: ${PRIMARY_IFACE}_1"
     iw phy $PHY interface add ${PRIMARY_IFACE}_1 type __ap 2>/dev/null || \
-      echo "Dikkat: Sanal AP arayüzü oluşturulamadı"
+      echo "Dikkat: Sanal AP arayüzü oluşturulamadı (sürücü desteklemiyor olabilir)"
   fi
+fi
+
+# 6) hostapd için varsayılan konfig dosyası oluştur
+if [ ! -f /etc/hostapd/hostapd.conf ]; then
+  echo "interface=$PRIMARY_IFACE" > /etc/hostapd/hostapd.conf
+  echo "driver=nl80211" >> /etc/hostapd/hostapd.conf
+  echo "ssid=Default-WiFi" >> /etc/hostapd/hostapd.conf
+  echo "hw_mode=g" >> /etc/hostapd/hostapd.conf
+  echo "channel=6" >> /etc/hostapd/hostapd.conf
+  echo "wpa=2" >> /etc/hostapd/hostapd.conf
+  echo "wpa_passphrase=password123" >> /etc/hostapd/hostapd.conf
+  echo "wpa_key_mgmt=WPA-PSK" >> /etc/hostapd/hostapd.conf
+  echo "rsn_pairwise=CCMP" >> /etc/hostapd/hostapd.conf
 fi
 
 # 7) hostapd başlat
