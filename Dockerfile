@@ -14,6 +14,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/default
+RUN mkdir -p /etc/hostapd
 
 WORKDIR /app
 COPY . /app
