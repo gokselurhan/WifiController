@@ -5,14 +5,13 @@ set -e
 DHCP_SERVERS=${DHCP_RELAY_SERVERS:-192.168.1.1}
 UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
 
-# 1) IPv4 forwarding aktif et - KALDIRILDI (host network'te izin verilmiyor)
-# /sbin/sysctl -w net.ipv4.ip_forward=1
+# IPv4 forwarding aktif et - KALDIRILDI (host network'te izin verilmiyor)
 
-# 2) VLAN desteği için kernel modülünü yükle
+# VLAN desteği için kernel modülünü yükle
 echo "8021q" >> /etc/modules
 modprobe 8021q
 
-# 3) DHCP Relay konfigürasyonu
+# DHCP Relay konfigürasyonu
 echo "DHCP Relay konfigürasyonu yapılıyor..."
 cat > /etc/default/isc-dhcp-relay <<EOF
 # Otomatik oluşturuldu - WiFi Kontrol Paneli
@@ -21,13 +20,13 @@ INTERFACES="$UPLINK_IFACE"
 OPTIONS="-d"
 EOF
 
-# 4) Fiziksel phy cihazını tespit et
+# Fiziksel phy cihazını tespit et
 PHY=$(iw dev | awk '$1=="phy"{print $2; exit}')
 
-# 5) Varsayılan AP arayüzünüzü bulun
+# Varsayılan AP arayüzünüzü bulun
 PRIMARY_IFACE=$(iw dev | awk '$1=="Interface"{print $2; exit}')
 
-# 6) Sanal AP arayüzü oluştur
+# Sanal AP arayüzü oluştur
 if [ -n "$PHY" ] && [ -n "$PRIMARY_IFACE" ]; then
   if ! iw dev | grep -q "${PRIMARY_IFACE}_1"; then
     echo "Sanal AP arayüzü oluşturuluyor: ${PRIMARY_IFACE}_1"
@@ -36,7 +35,7 @@ if [ -n "$PHY" ] && [ -n "$PRIMARY_IFACE" ]; then
   fi
 fi
 
-# 7) hostapd için varsayılan konfig dosyası oluştur
+# hostapd için varsayılan konfig dosyası oluştur
 if [ ! -f /etc/hostapd/hostapd.conf ]; then
   echo "interface=$PRIMARY_IFACE" > /etc/hostapd/hostapd.conf
   echo "driver=nl80211" >> /etc/hostapd/hostapd.conf
@@ -49,7 +48,7 @@ if [ ! -f /etc/hostapd/hostapd.conf ]; then
   echo "rsn_pairwise=CCMP" >> /etc/hostapd/hostapd.conf
 fi
 
-# 8) hostapd başlat
+# hostapd başlat
 echo "hostapd başlatılıyor..."
 if [ -s /etc/hostapd/hostapd.conf ]; then
   hostapd -B /etc/hostapd/hostapd.conf || echo "hostapd başlatılamadı"
@@ -57,14 +56,14 @@ else
   echo "Uyarı: hostapd.conf dosyası boş, hostapd başlatılmadı"
 fi
 
-# 9) DHCP Relay servisini başlat
+# DHCP Relay servisini başlat
 echo "DHCP Relay başlatılıyor..."
 service isc-dhcp-relay restart
 
-# 10) NAT kurallarını uygula
+# NAT kurallarını uygula
 echo "NAT kuralları ayarlanıyor..."
 iptables -t nat -F POSTROUTING
 iptables -t nat -A POSTROUTING -o $UPLINK_IFACE -j MASQUERADE
 
-# 11) Flask uygulamasını çalıştır
+# Flask uygulamasını çalıştır
 exec python app.py
