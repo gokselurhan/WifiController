@@ -69,6 +69,10 @@
         <select id="uplinkInterface" class="form-select mb-2">
           <option disabled selected>Yükleniyor…</option>
         </select>
+        <div class="mt-3">
+          <label class="form-label">DHCP Sunucu IP Adresi</label>
+          <input type="text" id="dhcpServer" class="form-control" value="192.168.1.1">
+        </div>
         <div id="uplinkWarning" class="text-danger mt-2"></div>
       </div>
     </div>
@@ -283,6 +287,8 @@
       }
       
       const uplink = document.getElementById('uplinkInterface').value;
+      const dhcpServer = document.getElementById('dhcpServer').value;
+      
       if (!uplink) {
         alert('Lütfen uplink arayüzünü seçin! DHCP Relay için zorunludur.');
         return;
@@ -322,7 +328,8 @@
           vlan,
           enable:document.getElementById('enable').value,
           iface,
-          uplink // Uplink arayüzünü de gönder
+          uplink: uplink,
+          dhcp_servers: dhcpServer
         })
       })
       .then(r => r.ok ? r.json() : r.json().then(e=>{throw new Error(e.error)}))
