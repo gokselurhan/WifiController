@@ -8,9 +8,10 @@ app = Flask(__name__)
 
 BASE_DIR  = os.path.dirname(__file__)
 SSID_FILE = "/etc/hostapd/hostapd.conf"
-RELAY_FILE = "/etc/hostapd/relay_config.txt"
+DHCP_RELAY_CONF = "/etc/default/isc-dhcp-relay"
 
 def get_ap_limit():
+    """`iw list` çıktısından #{ AP } <= N değerini bulur ve int olarak döner."""
     try:
         output = subprocess.check_output("iw list", shell=True, text=True)
         m = re.search(r"#\{\s*AP\s*\}\s*<=\s*(\d+)", output)
@@ -18,7 +19,20 @@ def get_ap_limit():
             return int(m.group(1))
     except:
         pass
-    return 1
+    return 1  # Eğer parse edilemezse fallback olarak 1 SSID
+
+def configure_dhcp_relay(uplink_interface):
+    """DHCP Relay konfigürasyonunu günceller"""
+    try:
+        with open(DHCP_RELAY_CONF, 'w') as f:
+            f.write(f"""# Otomatik oluşturuldu - WiFi Kontrol Paneli
+SERVERS=""
+INTERFACES=""
+OPTIONS=""
+""")
+        print(f"DHCP Relay konfigürasyonu güncellendi: {uplink_interface}")
+    except Exception as e:
+        print(f"DHCP Relay konfigürasyon hatası: {str(e)}")
 
 @app.route('/api/aplimit')
 def ap_limit():
@@ -91,17 +105,18 @@ def manage_ssids():
     # POST: yeni bloğu append et
     data = request.get_json(force=True)
     pwd = data.get('password','')
-    dhcp_relay = data.get('dhcp_relay', False)
-    vlan = data.get('vlan', 'Yok')
-    iface = data.get('iface')
-
     if not (8 <= len(pwd) <= 63):
         return jsonify({"error":"Parola 8–63 karakter olmalı."}), 400
+    
+    # DHCP Relay konfigürasyonunu güncelle
+    uplink_interface = data.get('uplink', '')
+    if uplink_interface:
+        configure_dhcp_relay(uplink_interface)
 
     try:
         with open(SSID_FILE, 'a') as f:
             f.write("\n# Eklenen SSID\n")
-            f.write(f"interface={iface}\n")
+            f.write(f"interface={data['iface']}\n")
             f.write("driver=nl80211\n")
             f.write(f"ssid={data['ssid']}\n")
             f.write("hw_mode=g\n")
@@ -112,14 +127,6 @@ def manage_ssids():
             f.write("rsn_pairwise=CCMP\n")
     except Exception as e:
         return jsonify({"error":f"Dosyaya yazılamadı: {e}"}), 500
-
-    # DHCP relay gerekiyorsa relay_config.txt'ye yaz
-    if dhcp_relay and vlan != "Yok":
-        try:
-            with open(RELAY_FILE, "a") as relayf:
-                relayf.write(f"{iface}:{vlan}:DHCPRELAY\n")
-        except Exception as e:
-            return jsonify({"error":f"Relay dosyasına yazılamadı: {e}"}), 500
 
     # Hostapd'yi önce zorla öldür, kısa süre bekle, sonra yeniden başlat
     subprocess.run(["pkill","-9","hostapd"], check=False)
