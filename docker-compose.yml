@@ -12,8 +12,10 @@ services:
     privileged: true
     volumes:
       - .:/app
-      - /etc/network:/etc/network:ro
-      - /etc/default/isc-dhcp-relay:/etc/default/isc-dhcp-relay
+      - dhcp_relay_config:/etc/default/isc-dhcp-relay
     environment:
-      - DHCP_RELAY_SERVERS=192.168.1.1  # LAN'daki DHCP sunucunuzun IP'si
-      - UPLINK_INTERFACE=eth0           # Varsayılan uplink arayüzü
+      - DHCP_RELAY_SERVERS=192.168.1.1
+      - UPLINK_INTERFACE=eth0
+
+volumes:
+  dhcp_relay_config:
