@@ -9,6 +9,8 @@ RUN apt-get update && \
     net-tools \
     isc-dhcp-relay \
     iptables \
+    wireless-tools \
+    wpasupplicant \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/default
@@ -16,7 +18,6 @@ RUN mkdir -p /etc/default
 WORKDIR /app
 COPY . /app
 
-# Python bağımlılıklarını yükle
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN chmod +x entrypoint.sh
