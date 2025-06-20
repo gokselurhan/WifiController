@@ -1,11 +1,21 @@
 #!/bin/bash
 set -e
 
+# Ortam değişkenlerini al
+DHCP_SERVERS=${DHCP_RELAY_SERVERS:-192.168.1.1}
+UPLINK_IFACE=${UPLINK_INTERFACE:-eth0}
+
 # 1) IPv4 forwarding aktif et
 sysctl -w net.ipv4.ip_forward=1
 
-# 2) DHCP Relay servisini başlat
-service isc-dhcp-relay start
+# 2) DHCP Relay konfigürasyonu
+echo "DHCP Relay konfigürasyonu yapılıyor..."
+cat > /etc/default/isc-dhcp-relay <<EOL
+# Otomatik oluşturuldu - WiFi Kontrol Paneli
+SERVERS="$DHCP_SERVERS"
+INTERFACES=""
+OPTIONS=""
+EOL
 
 # 3) Fiziksel phy cihazını tespit et
 PHY=$(iw dev | awk '$1=="phy"{print $2; exit}')
@@ -30,5 +40,13 @@ else
   echo "hostapd config dosyası yok, hostapd başlatılmadı."
 fi
 
-# 7) Flask uygulamasını çalıştır
+# 7) DHCP Relay servisini başlat
+echo "DHCP Relay başlatılıyor..."
+service isc-dhcp-relay restart
+
+# 8) NAT kurallarını uygula
+echo "NAT kuralları ayarlanıyor..."
+iptables -t nat -A POSTROUTING -o $UPLINK_IFACE -j MASQUERADE
+
+# 9) Flask uygulamasını çalıştır
 exec python app.py
