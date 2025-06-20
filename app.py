@@ -137,4 +137,4 @@ def delete_ssid(index):
     current = []
     with open(SSID_FILE) as f:
         for line in f:
-            if line.strip().startswith('interf
+            if line.strip().startswith('interface='):
